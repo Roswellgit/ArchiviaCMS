@@ -46,7 +46,7 @@ exports.register = async (req, res) => {
     });
 
    try {
-    await emailService.sendOTP(email, otp); // AWAIT THIS
+    await emailService.sendOTP(email, otp); 
   } catch (emailError) {
     // If email fails, delete the user so they can try again
     await db.query('DELETE FROM users WHERE id = $1', [user.id]); 
@@ -179,19 +179,34 @@ exports.googleLogin = async (req, res) => {
     let user = await userModel.findByEmail(email);
 
     if (user) {
-      // Existing User: Authenticate with password
+      // Existing User Logic
       if (user.is_active === false) {
         return res.status(403).json({ message: 'This account has been deactivated.' });
       }
 
-      // Check if password matches
-      const passwordMatch = await bcrypt.compare(password, user.password_hash);
-      if (!passwordMatch) {
-        // Handle case where old Google users might not have a password set
-        if (user.password_hash === 'GOOGLE_AUTH_USER') {
-             return res.status(403).json({ message: 'Please reset your password to log in.' });
-        }
-        return res.status(401).json({ message: 'Invalid credentials.' });
+      // === UPDATED LOGIC FOR LEGACY USERS ===
+      // If the user has the placeholder password, update it now instead of blocking them
+      if (user.password_hash === 'GOOGLE_AUTH_USER') {
+          
+          // Validate the new password they provided
+          if (!passwordRegex.test(password)) {
+            return res.status(400).json({
+              message: 'Password is not strong enough.',
+              details: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.'
+            });
+          }
+
+          // Hash and save the new password
+          const newHash = await bcrypt.hash(password, saltRounds);
+          await userModel.updatePassword(user.id, newHash);
+          
+          // Continue to login (no need to return, just proceed to token generation)
+      } else {
+          // Standard Password Check for normal users
+          const passwordMatch = await bcrypt.compare(password, user.password_hash);
+          if (!passwordMatch) {
+            return res.status(401).json({ message: 'Invalid credentials.' });
+          }
       }
 
     } else {

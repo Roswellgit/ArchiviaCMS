@@ -21,6 +21,8 @@ export default function RegisterForm() {
   
   // State to hold the Google token temporarily
   const [googleToken, setGoogleToken] = useState(null);
+  // NEW: State to track if Google profile had complete name data
+  const [isGoogleDataComplete, setIsGoogleDataComplete] = useState(false);
 
   const router = useRouter(); 
   const { login } = useAuth();
@@ -46,7 +48,7 @@ export default function RegisterForm() {
     });
   };
 
-  // 1. Intercept Google Success: Decode token and fill form instead of immediate login
+  // 1. Intercept Google Success: Decode token and fill form
   const handleGoogleSuccess = (credentialResponse) => {
     try {
       const decoded = jwtDecode(credentialResponse.credential);
@@ -54,6 +56,14 @@ export default function RegisterForm() {
       setLastName(decoded.family_name || '');
       setEmail(decoded.email || '');
       setGoogleToken(credentialResponse.credential);
+      
+      // Check if both names are present
+      const hasFirstName = !!decoded.given_name;
+      const hasLastName = !!decoded.family_name;
+      
+      // If user is missing a last name (or first), allow editing.
+      // Otherwise, lock it (default behavior).
+      setIsGoogleDataComplete(hasFirstName && hasLastName);
       
       toast.success('Google details received. Please create a password to finish signup.', {
         duration: 5000,
@@ -85,11 +95,13 @@ export default function RegisterForm() {
 
     // 2. Branch logic: Check if completing a Google Signup or doing a Standard Signup
     if (googleToken) {
-      try {
-        // Call the Google Auth endpoint with BOTH the token and the new password
+      try { 
         const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/google`, {
           token: googleToken,
           password: password, 
+          // Sending these just in case the backend is updated or already handles them (though the provided snippet didn't show it explicitely using them, it's good practice).
+          firstName: firstName,
+          lastName: lastName 
         });
         
         login(res.data.user, res.data.token);
@@ -138,7 +150,9 @@ export default function RegisterForm() {
                   onChange={(e) => setFirstName(e.target.value)} 
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                   required 
-                  disabled={!!googleToken} // Disable if filled by Google
+                  // Disable ONLY if we have a token AND the data was complete. 
+                  // If data was incomplete (missing last name), this stays enabled.
+                  disabled={!!googleToken && isGoogleDataComplete} 
                 />
             </div>
             <div className="w-full sm:w-1/2">
@@ -149,7 +163,8 @@ export default function RegisterForm() {
                   onChange={(e) => setLastName(e.target.value)} 
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                   required 
-                  disabled={!!googleToken} // Disable if filled by Google
+                  // Same logic here
+                  disabled={!!googleToken && isGoogleDataComplete} 
                 />
             </div>
         </div>
@@ -161,7 +176,7 @@ export default function RegisterForm() {
             onChange={(e) => setEmail(e.target.value)} 
             className={`w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all ${googleToken ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-slate-50'}`}
             required 
-            readOnly={!!googleToken} // Prevent editing email to ensure it matches the token
+            readOnly={!!googleToken} // Email always strictly locked to token
           />
         </div>
         <div>
@@ -214,6 +229,7 @@ export default function RegisterForm() {
               setEmail('');
               setPassword('');
               setConfirmPassword('');
+              setIsGoogleDataComplete(false); // Reset this
             }}
             className="w-full py-2 text-sm text-slate-500 hover:text-red-600 transition-colors"
           >
