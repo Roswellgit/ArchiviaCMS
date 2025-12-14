@@ -153,17 +153,33 @@ export const adminUpdateSettings = updateSettings; // Alias
 export const resetSettings = () => api.post('/admin/settings/reset');
 export const adminResetSettings = resetSettings; // Alias
 
-// FIX: Removed manual Content-Type header to allow browser to generate boundary
-export const uploadIcon = (formData) => api.post('/admin/icon-upload', formData);
-export const adminUploadIcon = uploadIcon; // Alias
+// === BULLETPROOF UPLOAD FIX ===
+// We explicitly get the token from localStorage for these calls to ensure
+// the Authorization header is never missing, even if the Axios instance state is lost.
 
-// FIX: Removed manual Content-Type header to allow browser to generate boundary
-export const uploadBgImage = (formData) => api.post('/admin/upload-bg-image', formData);
-export const adminUploadBgImage = uploadBgImage; // Alias
+export const uploadIcon = (formData) => {
+    const token = localStorage.getItem('token');
+    return api.post('/admin/icon-upload', formData, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+};
+export const adminUploadIcon = uploadIcon;
 
-// FIX: Removed manual Content-Type header to allow browser to generate boundary
-export const uploadBrandIcon = (formData) => api.post('/admin/upload-brand-icon', formData);
-export const adminUploadBrandIcon = uploadBrandIcon; // Alias
+export const uploadBgImage = (formData) => {
+    const token = localStorage.getItem('token');
+    return api.post('/admin/upload-bg-image', formData, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+};
+export const adminUploadBgImage = uploadBgImage;
+
+export const uploadBrandIcon = (formData) => {
+    const token = localStorage.getItem('token');
+    return api.post('/admin/upload-brand-icon', formData, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+};
+export const adminUploadBrandIcon = uploadBrandIcon;
 
 export const removeBgImage = () => api.post('/admin/remove-bg-image');
 export const adminRemoveBgImage = removeBgImage; // Alias
