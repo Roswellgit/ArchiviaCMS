@@ -13,7 +13,6 @@ const BUCKET_NAME = process.env.AWS_BUCKET_NAME;
 
 // MODIFIED: Accepts 'isPublic' flag
 exports.uploadToS3 = async (file, filename, isPublic = false) => {
-  // Handle both Multer file objects and raw buffers
   const body = file.buffer ? file.buffer : file;
   const contentType = file.mimetype ? file.mimetype : 'application/pdf';
 
@@ -22,19 +21,17 @@ exports.uploadToS3 = async (file, filename, isPublic = false) => {
     Key: filename,
     Body: body,
     ContentType: contentType,
-    // If public, allow browser to view it inline
-    ContentDisposition: isPublic ? 'inline' : 'attachment' ,
-    ACL: isPublic ? 'public-read' : undefined
+    ContentDisposition: isPublic ? 'inline' : 'attachment',
+
   };
 
   await s3Client.send(new PutObjectCommand(params));
 
-  // IF PUBLIC (Previews): Return the full Web URL
   if (isPublic) {
+    // Ensure AWS_BUCKET_REGION is defined in your .env file!
     return `https://${BUCKET_NAME}.s3.${process.env.AWS_BUCKET_REGION}.amazonaws.com/${filename}`;
   }
 
-  // IF PRIVATE (Documents): Return the Key (for signing later)
   return filename;
 };
 

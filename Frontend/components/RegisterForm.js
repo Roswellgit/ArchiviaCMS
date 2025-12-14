@@ -36,7 +36,7 @@ export default function RegisterForm() {
     hasSpecial: false,
   });
 
-  const handlePasswordChange = (e) => {
+const handlePasswordChange = (e) => {
     const newPassword = e.target.value;
     setPassword(newPassword);
     setPasswordValidity({
@@ -44,11 +44,11 @@ export default function RegisterForm() {
       hasUpper: /[A-Z]/.test(newPassword),
       hasLower: /[a-z]/.test(newPassword),
       hasNumber: /[0-9]/.test(newPassword),
-      hasSpecial: /[@$!%*?&_]/.test(newPassword),
+      hasSpecial: /[^A-Za-z0-9]/.test(newPassword), 
     });
   };
 
-  // 1. Intercept Google Success: Decode token and fill form
+ 
   const handleGoogleSuccess = (credentialResponse) => {
     try {
       const decoded = jwtDecode(credentialResponse.credential);
@@ -57,12 +57,11 @@ export default function RegisterForm() {
       setEmail(decoded.email || '');
       setGoogleToken(credentialResponse.credential);
       
-      // Check if both names are present
+   
       const hasFirstName = !!decoded.given_name;
       const hasLastName = !!decoded.family_name;
       
-      // If user is missing a last name (or first), allow editing.
-      // Otherwise, lock it (default behavior).
+    
       setIsGoogleDataComplete(hasFirstName && hasLastName);
       
       toast.success('Google details received. Please create a password to finish signup.', {
@@ -93,13 +92,13 @@ export default function RegisterForm() {
 
     setLoading(true);
 
-    // 2. Branch logic: Check if completing a Google Signup or doing a Standard Signup
+  
     if (googleToken) {
       try { 
         const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/google`, {
           token: googleToken,
           password: password, 
-          // Sending these just in case the backend is updated or already handles them (though the provided snippet didn't show it explicitely using them, it's good practice).
+      
           firstName: firstName,
           lastName: lastName 
         });

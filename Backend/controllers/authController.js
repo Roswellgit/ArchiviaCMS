@@ -9,7 +9,8 @@ const db = require('../db');
 const saltRounds = 10;
 const JWT_SECRET = process.env.JWT_SECRET;
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+// Updated Regex: Allows any special character (not just specific ones)
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])[A-Za-z\d\W]{8,}$/;
 
 exports.register = async (req, res) => {
   const { firstName, lastName, email, password } = req.body;
@@ -48,7 +49,6 @@ exports.register = async (req, res) => {
    try {
     await emailService.sendOTP(email, otp); 
   } catch (emailError) {
-    // If email fails, delete the user so they can try again
     await db.query('DELETE FROM users WHERE id = $1', [user.id]); 
     return res.status(500).json({ message: 'Failed to send verification email. Please try again.' });
   }
@@ -162,11 +162,7 @@ exports.login = async (req, res) => {
 };
 
 exports.googleLogin = async (req, res) => {
-  const { token, password } = req.body; // Password is now required
-
-  if (!password) {
-    return res.status(400).json({ message: 'Password is required for Google login.' });
-  }
+  const { token, password } = req.body;
 
   try {
     const ticket = await client.verifyIdToken({
@@ -179,38 +175,21 @@ exports.googleLogin = async (req, res) => {
     let user = await userModel.findByEmail(email);
 
     if (user) {
-      // Existing User Logic
+      // === EXISTING USER: DIRECT LOGIN ===
+      // If user exists, we trust the Google Token. No password check required.
+      
       if (user.is_active === false) {
         return res.status(403).json({ message: 'This account has been deactivated.' });
       }
 
-      // === UPDATED LOGIC FOR LEGACY USERS ===
-      // If the user has the placeholder password, update it now instead of blocking them
-      if (user.password_hash === 'GOOGLE_AUTH_USER') {
-          
-          // Validate the new password they provided
-          if (!passwordRegex.test(password)) {
-            return res.status(400).json({
-              message: 'Password is not strong enough.',
-              details: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.'
-            });
-          }
+    } else {
+      // === NEW USER: REGISTER WITH PASSWORD ===
+      // If user does not exist, we must create one, so password IS required here.
 
-          // Hash and save the new password
-          const newHash = await bcrypt.hash(password, saltRounds);
-          await userModel.updatePassword(user.id, newHash);
-          
-          // Continue to login (no need to return, just proceed to token generation)
-      } else {
-          // Standard Password Check for normal users
-          const passwordMatch = await bcrypt.compare(password, user.password_hash);
-          if (!passwordMatch) {
-            return res.status(401).json({ message: 'Invalid credentials.' });
-          }
+      if (!password) {
+        return res.status(400).json({ message: 'Password is required to create a new account.' });
       }
 
-    } else {
-      // New User: Validate password strength and Create
       if (!passwordRegex.test(password)) {
         return res.status(400).json({
           message: 'Password is not strong enough.',
@@ -306,8 +285,6 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-// === NEW METHODS ===
-
 exports.updateProfile = async (req, res) => {
   const { firstName, lastName, email } = req.body;
   const userId = req.user.userId; 
@@ -317,7 +294,6 @@ exports.updateProfile = async (req, res) => {
   }
 
   try {
-    // Check if email is being changed and if it's already taken
     if (email) {
       const existingUser = await userModel.findByEmail(email);
       if (existingUser && existingUser.id !== userId) {
@@ -327,7 +303,6 @@ exports.updateProfile = async (req, res) => {
 
     const updatedUser = await userModel.updateProfile(userId, { firstName, lastName, email });
     
-    // Generate a NEW token with the updated information so the frontend can update immediately
     const token = jwt.sign(
       { 
         userId: userId, 
@@ -360,13 +335,11 @@ exports.updateProfile = async (req, res) => {
 
 exports.getProfile = async (req, res) => {
   try {
-    // req.user.userId comes from the authMiddleware
     const user = await userModel.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
     
-    // Return only safe data (no passwords!)
     res.json({
       id: user.id,
       email: user.email,
@@ -397,20 +370,17 @@ exports.changePassword = async (req, res) => {
   }
 
   try {
-    // 1. Get user to verify current password
     const user = await userModel.findByEmail(req.user.email);
 
     if (!user) {
         return res.status(404).json({ message: 'User not found.' });
     }
 
-    // 2. Verify current password
     const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({ message: 'Incorrect current password.' });
     }
 
-    // 3. Hash new password and update
     const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
     await userModel.updatePassword(userId, newPasswordHash);
 

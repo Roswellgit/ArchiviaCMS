@@ -87,7 +87,6 @@ export default function MyUploadsList() {
                     </p>
                     <div className="flex gap-4 mt-2 text-xs font-bold uppercase tracking-wider text-slate-400">
                         <span>{doc.ai_date_created || 'Date Unknown'}</span>
-                        <a href={doc.filepath} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">View PDF</a>
                     </div>
                 </div>
                 <div className="flex gap-3">
