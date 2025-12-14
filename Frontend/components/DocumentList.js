@@ -160,7 +160,7 @@ export default function DocumentList({
                             {currentDocuments.map((doc) => {
                                 try {
                                     const aiAuthors = getSafeList(doc.ai_authors);
-                                    const aiKeywords = getSafeList(doc.ai_keywords).slice(0, 5);
+                                    const aiKeywords = getSafeList(doc.ai_keywords).slice(0, 6);
                                     const isMenuOpen = activeCiteMenu === doc.id;
 
                                     return (
