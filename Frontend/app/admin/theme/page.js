@@ -87,16 +87,40 @@ export default function AdminThemeManagement() {
       try { await adminUploadIcon(fd); toast.success("Favicon updated."); } catch(e){ toast.error("Failed."); } finally { setLoading(false); }
   };
 
+  // UPDATED: Now accepts 'e' but doesn't require preventDefault if called from onClick
   const handleBgSubmit = async (e) => {
-      e.preventDefault(); if(!bgImageFile) return; setLoading(true);
-      const fd = new FormData(); fd.append('bg-image', bgImageFile);
-      try { const r = await adminUploadBgImage(fd); setSettings({...settings, backgroundImage: r.data.imageUrl}); toast.success("Background updated."); } catch(e){ toast.error("Failed."); } finally { setLoading(false); }
+      if (e) e.preventDefault(); 
+      if (!bgImageFile) return; 
+      setLoading(true);
+      const fd = new FormData(); 
+      fd.append('bg-image', bgImageFile);
+      try { 
+          const r = await adminUploadBgImage(fd); 
+          setSettings({...settings, backgroundImage: r.data.imageUrl}); 
+          toast.success("Background updated."); 
+      } catch(err){ 
+          toast.error("Failed to upload background."); 
+      } finally { 
+          setLoading(false); 
+      }
   };
 
+  // UPDATED: Now accepts 'e' but doesn't require preventDefault if called from onClick
   const handleBrandSubmit = async (e) => {
-      e.preventDefault(); if(!brandIconFile) return; setLoading(true);
-      const fd = new FormData(); fd.append('brand-icon', brandIconFile);
-      try { const r = await adminUploadBrandIcon(fd); setSettings({...settings, brandIconUrl: r.data.iconUrl}); toast.success("Brand icon updated."); } catch(e){ toast.error("Failed."); } finally { setLoading(false); }
+      if (e) e.preventDefault(); 
+      if (!brandIconFile) return; 
+      setLoading(true);
+      const fd = new FormData(); 
+      fd.append('brand-icon', brandIconFile);
+      try { 
+          const r = await adminUploadBrandIcon(fd); 
+          setSettings({...settings, brandIconUrl: r.data.iconUrl}); 
+          toast.success("Brand icon updated."); 
+      } catch(err){ 
+          toast.error("Failed to upload icon."); 
+      } finally { 
+          setLoading(false); 
+      }
   };
   
   const handleRemoveBg = () => {
@@ -141,6 +165,7 @@ export default function AdminThemeManagement() {
         <button onClick={confirmReset} className="text-sm font-bold text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg transition">Reset Defaults</button>
       </div>
 
+      {/* Main Settings Form */}
       <form onSubmit={submitSettings} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* Colors Card */}
@@ -231,10 +256,12 @@ export default function AdminThemeManagement() {
                             <button type="button" onClick={handleRemoveBg} className="text-xs text-red-500 font-bold hover:underline">Remove</button>
                         )}
                     </div>
-                    <form onSubmit={handleBgSubmit} className="space-y-3">
+                    {/* FIXED: Changed from <form> to <div> */}
+                    <div className="space-y-3">
                         <input type="file" onChange={(e) => setBgImageFile(e.target.files[0])} className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
-                        <button type="submit" className="w-full py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition text-xs">Upload BG</button>
-                    </form>
+                        {/* FIXED: type="button" and onClick handler */}
+                        <button type="button" onClick={handleBgSubmit} className="w-full py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition text-xs">Upload BG</button>
+                    </div>
                  </div>
 
                  {/* Brand Icon Upload */}
@@ -245,10 +272,12 @@ export default function AdminThemeManagement() {
                             <button type="button" onClick={handleRemoveBrand} className="text-xs text-red-500 font-bold hover:underline">Remove</button>
                         )}
                     </div>
-                    <form onSubmit={handleBrandSubmit} className="space-y-3">
+                    {/* FIXED: Changed from <form> to <div> */}
+                    <div className="space-y-3">
                         <input type="file" onChange={(e) => setBrandIconFile(e.target.files[0])} className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
-                        <button type="submit" className="w-full py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition text-xs">Upload Icon</button>
-                    </form>
+                        {/* FIXED: type="button" and onClick handler */}
+                        <button type="button" onClick={handleBrandSubmit} className="w-full py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition text-xs">Upload Icon</button>
+                    </div>
                  </div>
             </div>
         </div>
