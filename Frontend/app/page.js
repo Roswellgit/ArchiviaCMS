@@ -93,10 +93,8 @@ function HomeContent() {
     const safeTrending = Array.isArray(popularSearches) ? popularSearches : [];
 
     return (
-      <main 
-        className="flex flex-col relative overflow-x-hidden"
-        style={{ backgroundColor: 'var(--background-color)' }}
-      >
+      // FIXED: Removed style={{ backgroundColor: ... }} so body bg shows through
+      <main className="flex flex-col relative overflow-x-hidden">
         
         {/* Abstract Background Shapes (Fixed to viewport) */}
         <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
@@ -106,7 +104,6 @@ function HomeContent() {
         </div>
 
         {/* --- HERO SECTION (Full Screen Height) --- */}
-        {/* min-h-screen ensures this takes up the full view, forcing the next section below the fold */}
         <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center relative z-10 pb-20">
             <div className="max-w-4xl w-full space-y-12 animate-fade-in flex flex-col items-center">
                 
@@ -208,10 +205,8 @@ function HomeContent() {
 
   // --- VIEW: RESULTS LIST (APP MODE) ---
   return (
-    <main 
-      className="max-w-6xl mx-auto p-4 md:p-8 min-h-screen animate-fade-in"
-      style={{ backgroundColor: 'var(--background-color)' }}
-    >
+    // FIXED: Removed style={{ backgroundColor: ... }} so body bg shows through
+    <main className="max-w-6xl mx-auto p-4 md:p-8 min-h-screen animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
         <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Library Results</h1>

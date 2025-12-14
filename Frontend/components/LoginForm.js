@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
-// Updated import to include googleLogin
 import { login as apiLogin, googleLogin as apiGoogleLogin } from '../services/apiService';
 import { toast } from 'react-hot-toast';
 import { jwtDecode } from 'jwt-decode';
@@ -15,10 +14,10 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false); 
   const [loading, setLoading] = useState(false);
   
-  // NEW: State for Google Login Modal
+  // State for Google Login Modal (only for new users)
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleUser, setGoogleUser] = useState(null);
-  const [googleToken, setGoogleToken] = useState(null); // Store the raw token
+  const [googleToken, setGoogleToken] = useState(null); 
 
   const router = useRouter();
   const { login } = useAuth();
@@ -31,7 +30,7 @@ export default function LoginForm() {
     }
   };
 
-  // Shared Login Logic (Standard Email/Pass)
+  // Standard Email/Pass Login
   const performLogin = async (loginEmail, loginPassword) => {
     setLoading(true);
     const toastId = toast.loading('Logging in...');
@@ -54,34 +53,26 @@ export default function LoginForm() {
     }
   };
 
-  // NEW: Google Login Logic (Token + Password)
-  const performGoogleLogin = async (token, loginPassword) => {
+  // Google Login Logic (called by Modal for NEW users)
+  const performGoogleRegistration = async (token, loginPassword) => {
     setLoading(true);
-    const toastId = toast.loading('Verifying Google credentials...');
+    const toastId = toast.loading('Creating account...');
     try {
-        // Send both Token AND Password to backend
         const response = await apiGoogleLogin(token, loginPassword);
         
         const userData = response.data.user;
         login(userData, response.data.token);
         
-        toast.success(`Welcome back, ${userData.firstName}!`, { id: toastId });
+        toast.success(`Welcome, ${userData.firstName}!`, { id: toastId });
         setTimeout(() => {
             handleRedirect(userData);
         }, 1000);
     } catch (error) {
-        console.error('Google Login error:', error);
-        let msg = 'Google login failed.';
+        console.error('Google Registration error:', error);
+        let msg = 'Google registration failed.';
         
         if (error.response) {
-            // Backend returns 403 if existing user has placeholder password
-            if (error.response.status === 403) {
-                 msg = error.response.data.message || 'Security Update: Please reset your password to log in.';
-            } else if (error.response.status === 401) {
-                 msg = 'Invalid password for this Google account.';
-            } else {
-                 msg = error.response.data.message || msg;
-            }
+             msg = error.response.data.message || msg;
         }
         toast.error(msg, { id: toastId });
     } finally {
@@ -98,12 +89,14 @@ export default function LoginForm() {
     performLogin(email, password);
   };
 
-  // UPDATED: Google Handler extracts details and opens password modal
+  // UPDATED: Handle Google Success
+  // Attempts instant login first. Shows modal ONLY if backend says password is required (New User).
   const handleGoogleSuccess = async (credentialResponse) => {
+    const toastId = toast.loading('Verifying Google credentials...');
     try {
       const decoded = jwtDecode(credentialResponse.credential);
       
-      // Update state with Google details
+      // Store details in case we need to register a new user
       setGoogleUser({
         firstName: decoded.given_name,
         lastName: decoded.family_name,
@@ -111,18 +104,45 @@ export default function LoginForm() {
         email: decoded.email,
         picture: decoded.picture
       });
-      
-      // Store the token to send later
       setGoogleToken(credentialResponse.credential);
 
-      // Pre-fill main form email (optional, keeps state consistent)
-      setEmail(decoded.email); 
-      setPassword(''); // Clear any previous password
-      setShowGoogleModal(true); // Open the password modal
+      // ATTEMPT 1: Try login WITHOUT password (for existing users)
+      try {
+          // Pass null/undefined for password to see if user exists
+          const response = await apiGoogleLogin(credentialResponse.credential); 
+          
+          // If successful, it was an existing user
+          const userData = response.data.user;
+          login(userData, response.data.token);
+          toast.success(`Welcome back, ${userData.firstName}!`, { id: toastId });
+          setTimeout(() => {
+              handleRedirect(userData);
+          }, 1000);
+
+      } catch (loginError) {
+          // If backend returns 400 "Password is required...", it implies user DOES NOT exist
+          if (loginError.response && loginError.response.status === 400 && 
+              loginError.response.data.message === 'Password is required to create a new account.') {
+              
+              toast.dismiss(toastId); // Remove the "Verifying" toast
+              
+              // Now we show the modal to get a password for the new account
+              setEmail(decoded.email); 
+              setPassword(''); 
+              setShowGoogleModal(true); 
+          } else {
+              // Real error (e.g. Deactivated account, Google auth failed)
+              throw loginError;
+          }
+      }
 
     } catch (err) {
       console.error('Google Processing Error:', err);
-      toast.error('Failed to process Google login.');
+      let msg = 'Google login failed.';
+      if (err.response && err.response.data && err.response.data.message) {
+          msg = err.response.data.message;
+      }
+      toast.error(msg, { id: toastId });
     }
   };
 
@@ -215,7 +235,7 @@ export default function LoginForm() {
         </Link>
       </p>
 
-      {/* === GOOGLE LOGIN PASSWORD MODAL === */}
+      {/* === GOOGLE REGISTRATION PASSWORD MODAL === */}
       {showGoogleModal && googleUser && (
         <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col justify-center items-center p-6 animate-in fade-in zoom-in duration-200">
             <div className="w-full space-y-6">
@@ -224,14 +244,14 @@ export default function LoginForm() {
                         <img src={googleUser.picture} alt="Profile" className="w-16 h-16 rounded-full mx-auto border-2 border-slate-100 shadow-sm mb-3" />
                     )}
                     <h3 className="text-xl font-bold text-slate-900">
-                      Hello, {googleUser.firstName} {googleUser.lastName}
+                      Welcome, {googleUser.firstName}!
                     </h3>
                     <p className="text-sm text-slate-500 font-medium">{googleUser.email}</p>
                 </div>
 
                 <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-lg text-center">
                     <p className="text-xs text-indigo-700 font-semibold">
-                        To continue safely, please enter your Archivia password.
+                        To create your account, please set a secure password.
                     </p>
                 </div>
 
@@ -239,14 +259,13 @@ export default function LoginForm() {
                     className="space-y-4"
                     onSubmit={(e) => {
                         e.preventDefault();
-                        // Use the NEW google login function
-                        performGoogleLogin(googleToken, password);
+                        performGoogleRegistration(googleToken, password);
                     }}
                 >
                     <div className="relative">
                         <input
                             type={showPassword ? 'text' : 'password'}
-                            placeholder="Enter Password"
+                            placeholder="Create Password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-center"
@@ -284,7 +303,7 @@ export default function LoginForm() {
                             disabled={loading}
                             className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-md transition-colors"
                         >
-                            {loading ? 'Verifying...' : 'Continue Login'}
+                            {loading ? 'Creating...' : 'Create Account'}
                         </button>
                     </div>
                 </form>
