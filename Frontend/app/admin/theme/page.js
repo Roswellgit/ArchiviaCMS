@@ -52,8 +52,23 @@ export default function AdminThemeManagement() {
     }
   };
 
-  const resetSettings = async () => {
-    if (!confirm("Reset to default theme?")) return;
+  const confirmReset = () => {
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p className="font-bold text-slate-800 text-sm">Reset to default theme?</p>
+        <p className="text-xs text-slate-500">This will discard all customizations.</p>
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
+          <button onClick={() => {
+              toast.dismiss(t.id);
+              executeReset();
+          }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Reset</button>
+        </div>
+      </div>
+    ), { duration: Infinity, position: 'top-center', icon: '⚠️' });
+  };
+
+  const executeReset = async () => {
     setLoading(true);
     try { 
         const res = await adminResetSettings(); 
@@ -84,14 +99,34 @@ export default function AdminThemeManagement() {
       try { const r = await adminUploadBrandIcon(fd); setSettings({...settings, brandIconUrl: r.data.iconUrl}); toast.success("Brand icon updated."); } catch(e){ toast.error("Failed."); } finally { setLoading(false); }
   };
   
-  const handleRemoveBg = async () => {
-      if(!confirm("Remove background image?")) return;
-      try { await adminRemoveBgImage(); setSettings({...settings, backgroundImage: 'none'}); toast.success("Removed."); } catch { toast.error("Failed."); }
+  const handleRemoveBg = () => {
+      toast((t) => (
+        <div className="flex flex-col gap-2">
+            <p className="font-bold text-slate-800 text-sm">Remove background image?</p>
+            <div className="flex gap-2 justify-end pt-1">
+                <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
+                <button onClick={async () => {
+                    toast.dismiss(t.id);
+                    try { await adminRemoveBgImage(); setSettings({...settings, backgroundImage: 'none'}); toast.success("Removed."); } catch { toast.error("Failed."); }
+                }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Remove</button>
+            </div>
+        </div>
+      ), { duration: 5000, position: 'top-center', icon: '🗑️' });
   };
 
-  const handleRemoveBrand = async () => {
-      if(!confirm("Remove brand icon?")) return;
-      try { await adminRemoveBrandIcon(); setSettings({...settings, brandIconUrl: 'none'}); toast.success("Removed."); } catch { toast.error("Failed."); }
+  const handleRemoveBrand = () => {
+      toast((t) => (
+        <div className="flex flex-col gap-2">
+            <p className="font-bold text-slate-800 text-sm">Remove brand icon?</p>
+            <div className="flex gap-2 justify-end pt-1">
+                <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
+                <button onClick={async () => {
+                    toast.dismiss(t.id);
+                    try { await adminRemoveBrandIcon(); setSettings({...settings, brandIconUrl: 'none'}); toast.success("Removed."); } catch { toast.error("Failed."); }
+                }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Remove</button>
+            </div>
+        </div>
+      ), { duration: 5000, position: 'top-center', icon: '🗑️' });
   };
 
   if (loading && !settings.navbarBrandText) return <div className="p-10 text-center">Loading theme...</div>;
@@ -103,7 +138,7 @@ export default function AdminThemeManagement() {
             <h2 className="text-3xl font-extrabold text-slate-900">Theme Customization</h2>
             <p className="text-slate-500 mt-1">Branding and appearance settings</p>
         </div>
-        <button onClick={resetSettings} className="text-sm font-bold text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg transition">Reset Defaults</button>
+        <button onClick={confirmReset} className="text-sm font-bold text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg transition">Reset Defaults</button>
       </div>
 
       <form onSubmit={submitSettings} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -113,7 +148,7 @@ export default function AdminThemeManagement() {
             <h3 className="text-lg font-bold text-slate-800 mb-6">Color Palette</h3>
             <div className="space-y-8">
                 
-                {/* 1. Page Background (RESTORED) */}
+                {/* 1. Page Background */}
                 <div>
                     <div className="flex justify-between items-center mb-2">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Page Background</label>

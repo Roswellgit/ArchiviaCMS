@@ -29,8 +29,23 @@ export default function ArchivedUsers() {
     }
   };
 
-  const handleRestore = async (userId) => {
-    if (!window.confirm("Restore this user? They will be able to log in again.")) return;
+  const handleRestore = (userId) => {
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p className="font-bold text-slate-800 text-sm">Restore User?</p>
+        <p className="text-xs text-slate-500">They will be able to log in again.</p>
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
+          <button onClick={() => {
+              toast.dismiss(t.id);
+              executeRestore(userId);
+          }} className="text-xs bg-green-600 text-white font-bold px-3 py-1 rounded hover:bg-green-700">Restore</button>
+        </div>
+      </div>
+    ), { duration: 6000, position: 'top-center', icon: '♻️' });
+  };
+
+  const executeRestore = async (userId) => {
     try {
       await adminReactivateUser(userId);
       toast.success('User restored.');
@@ -41,8 +56,23 @@ export default function ArchivedUsers() {
   };
 
   // === NEW: Permanent Delete Handler ===
-  const handleDelete = async (userId) => {
-    if (!window.confirm("PERMANENTLY DELETE USER? This cannot be undone.")) return;
+  const handleDelete = (userId) => {
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p className="font-bold text-slate-800 text-sm">Delete Permanently?</p>
+        <p className="text-xs text-slate-500">This cannot be undone.</p>
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
+          <button onClick={() => {
+              toast.dismiss(t.id);
+              executeDelete(userId);
+          }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Delete</button>
+        </div>
+      </div>
+    ), { duration: 6000, position: 'top-center', icon: '⚠️' });
+  };
+
+  const executeDelete = async (userId) => {
     try {
       await adminDeleteUserPermanently(userId);
       toast.success('User permanently deleted.');

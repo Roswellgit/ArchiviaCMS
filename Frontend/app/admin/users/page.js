@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { getAllUsers, adminUpdateUser, adminDeleteUser } from '../../../services/apiService';
 import { useAuth } from '../../../context/AuthContext';
 import EditUserModal from '../../../components/EditUserModal';
-import RequestModal from '../../../components/RequestModal'; 
 import { toast } from 'react-hot-toast';
 import Link from 'next/link'; 
 
@@ -15,8 +14,6 @@ export default function AdminUserManagement() {
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
-  const [userToArchive, setUserToArchive] = useState(null);
 
   useEffect(() => { fetchUsers(); }, []);
 
@@ -35,24 +32,55 @@ export default function AdminUserManagement() {
   const initiateArchive = (targetUser) => {
     if (targetUser.id === adminUser.userId) return toast.error("You cannot archive your own account.");
     if (targetUser.is_super_admin && !adminUser.is_super_admin) return toast.error("Access Denied: Super Admin protected.");
-    setUserToArchive(targetUser);
-    setIsArchiveModalOpen(true);
-  };
-
-  const handleConfirmArchive = async (reason) => {
-    try {
-        if (adminUser.is_super_admin) {
-             await adminDeleteUser(userToArchive.id);
-             toast.success('User archived.');
-        } else {
-             if (!reason.trim()) return toast.error("Reason is required.");
-             await adminDeleteUser(userToArchive.id, { reason });
-             toast.success('Archive request submitted.');
-        }
-        setIsArchiveModalOpen(false);
-        setUserToArchive(null);
-        fetchUsers(); 
-    } catch (err) { toast.error('Action failed.'); }
+    
+    // Check if Super Admin (Direct Action) or Admin (Reason Required)
+    if (adminUser.is_super_admin) {
+        toast((t) => (
+            <div className="flex flex-col gap-2">
+              <p className="font-bold text-slate-800 text-sm">Archive User?</p>
+              <p className="text-xs text-slate-500">Archive <span className="font-bold">{targetUser.first_name}</span> immediately?</p>
+              <div className="flex gap-2 justify-end pt-1">
+                <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
+                <button onClick={() => {
+                    adminDeleteUser(targetUser.id)
+                        .then(() => { toast.success("User archived.", { id: t.id }); fetchUsers(); })
+                        .catch(() => toast.error("Archive failed.", { id: t.id }));
+                }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Confirm</button>
+              </div>
+            </div>
+        ), { duration: Infinity, position: 'top-center', icon: '⚠️' });
+    } else {
+        // Admin Request Mode
+        toast((t) => (
+            <div className="flex flex-col gap-3 min-w-[300px]">
+              <p className="font-bold text-slate-800 text-sm">Request Archive:</p>
+              <p className="text-xs text-slate-500">Reason for archiving <span className="font-bold">{targetUser.first_name}</span>?</p>
+              <form 
+                className="flex flex-col gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const reason = e.target.elements.reason.value;
+                  if (!reason.trim()) return toast.error("Reason is required", { id: t.id });
+                  
+                  adminDeleteUser(targetUser.id, { reason })
+                      .then(() => { toast.success("Request sent.", { id: t.id }); fetchUsers(); })
+                      .catch(() => toast.error("Request failed.", { id: t.id }));
+                }}
+              >
+                <input 
+                  name="reason" 
+                  placeholder="Type reason..." 
+                  className="border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  autoFocus
+                />
+                <div className="flex gap-2 justify-end pt-1">
+                   <button type="button" onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1.5 hover:bg-slate-100 rounded">Cancel</button>
+                   <button type="submit" className="text-xs bg-red-600 text-white font-bold px-3 py-1.5 rounded hover:bg-red-700">Send Request</button>
+                </div>
+              </form>
+            </div>
+        ), { duration: Infinity, position: 'top-center', icon: '📂' });
+    }
   };
 
   const handleEdit = (user) => {
@@ -148,16 +176,6 @@ export default function AdminUserManagement() {
           setSelectedUser(null);
         }} 
         onSave={handleSave} 
-      />
-      
-      <RequestModal 
-        isOpen={isArchiveModalOpen}
-        onClose={() => setIsArchiveModalOpen(false)}
-        onSubmit={handleConfirmArchive}
-        title="Confirm User Action"
-        message={<p>Archive user <span className="font-bold text-slate-900">{userToArchive?.first_name}</span>?</p>}
-        actionLabel={adminUser.is_super_admin ? "Archive User" : "Send Request"}
-        confirmColor="bg-red-600 hover:bg-red-700"
       />
     </div>
   );

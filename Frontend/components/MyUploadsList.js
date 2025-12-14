@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import EditDocumentModal from './EditDocumentModal'; 
-import RequestModal from './RequestModal'; 
 import { getMyUploads, updateDocument, requestDeletion } from '../services/apiService';
 import { toast } from 'react-hot-toast'; 
 
@@ -12,8 +11,6 @@ export default function MyUploadsList() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [docToDelete, setDocToDelete] = useState(null);
 
   useEffect(() => { fetchUploads(); }, []);
 
@@ -33,21 +30,42 @@ export default function MyUploadsList() {
     catch (e) { toast.error("Save failed."); }
   };
 
-  const handleDeleteClick = (doc) => {
+  const handleDeleteRequest = (doc) => {
     if (doc.deletion_requested) return toast("Request already pending.");
-    setDocToDelete(doc);
-    setIsDeleteModalOpen(true);
-  };
-
-  const handleSubmitRequest = async (reason) => {
-    if (!reason.trim()) return toast.error("Reason required.");
-    try {
-        await requestDeletion(docToDelete.id, reason);
-        setIsDeleteModalOpen(false);
-        setDocToDelete(null);
-        toast.success("Request sent.");
-        await fetchUploads(); 
-    } catch (err) { console.error(err); }
+    
+    toast((t) => (
+      <div className="flex flex-col gap-3 min-w-[300px]">
+        <p className="font-bold text-slate-800 text-sm">Reason for deletion:</p>
+        <p className="text-xs text-slate-500">Why do you want to delete <span className="font-bold">{doc.title}</span>?</p>
+        <form 
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const reason = e.target.elements.reason.value;
+            if (!reason.trim()) return toast.error("Reason is required", { id: t.id });
+            
+            // Execute request
+            requestDeletion(doc.id, reason)
+                .then(() => {
+                    toast.success("Request sent.", { id: t.id });
+                    fetchUploads();
+                })
+                .catch(() => toast.error("Request failed.", { id: t.id }));
+          }}
+        >
+          <textarea 
+            name="reason" 
+            placeholder="Type reason..." 
+            className="border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none min-h-[60px]"
+            autoFocus
+          />
+          <div className="flex gap-2 justify-end pt-1">
+             <button type="button" onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1.5 hover:bg-slate-100 rounded">Cancel</button>
+             <button type="submit" className="text-xs bg-red-600 text-white font-bold px-3 py-1.5 rounded hover:bg-red-700">Submit Request</button>
+          </div>
+        </form>
+      </div>
+    ), { duration: Infinity, position: 'top-center', icon: '🗑️' });
   };
   
   if (loading) return <p className="text-center text-slate-400 p-10">Loading...</p>;
@@ -75,7 +93,7 @@ export default function MyUploadsList() {
                 <div className="flex gap-3">
                     <button onClick={() => handleEdit(doc)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition">Edit</button>
                     <button
-                        onClick={() => handleDeleteClick(doc)}
+                        onClick={() => handleDeleteRequest(doc)}
                         disabled={doc.deletion_requested}
                         className={`px-4 py-2 text-white font-bold rounded-lg transition shadow-sm ${doc.deletion_requested ? "bg-slate-300 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"}`}
                     >
@@ -87,7 +105,6 @@ export default function MyUploadsList() {
       )}
       
       {isModalOpen && <EditDocumentModal document={selectedDocument} onClose={() => setIsModalOpen(false)} onSave={handleSave} />}
-      <RequestModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onSubmit={handleSubmitRequest} title="Request Deletion" message={<p>Why do you want to delete <span className="font-bold">{docToDelete?.title}</span>?</p>} actionLabel="Send Request" />
     </div>
   );
 }
