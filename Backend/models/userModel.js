@@ -113,16 +113,13 @@ exports.revokeArchiveRequest = async (id) => {
   return rows[0];
 };
 
-exports.findOrCreateByGoogle = async ({ email, firstName, lastName }) => {
-  const existingUser = await exports.findByEmail(email);
-  if (existingUser) return existingUser;
-
+exports.createGoogleUser = async ({ email, firstName, lastName, passwordHash }) => {
   const { rows } = await db.query(
     `INSERT INTO users 
      (first_name, last_name, email, password_hash, is_verified, is_active) 
      VALUES ($1, $2, $3, $4, TRUE, TRUE) 
      RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
-    [firstName, lastName, email, 'GOOGLE_AUTH_USER'] 
+    [firstName, lastName, email, passwordHash] 
   );
   return rows[0];
 };

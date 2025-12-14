@@ -162,7 +162,11 @@ exports.login = async (req, res) => {
 };
 
 exports.googleLogin = async (req, res) => {
-  const { token } = req.body;
+  const { token, password } = req.body; // Password is now required
+
+  if (!password) {
+    return res.status(400).json({ message: 'Password is required for Google login.' });
+  }
 
   try {
     const ticket = await client.verifyIdToken({
@@ -172,14 +176,41 @@ exports.googleLogin = async (req, res) => {
     const payload = ticket.getPayload();
     const { email, given_name, family_name } = payload;
 
-    const user = await userModel.findOrCreateByGoogle({
-      email,
-      firstName: given_name || 'Google',
-      lastName: family_name || 'User'
-    });
+    let user = await userModel.findByEmail(email);
 
-    if (user.is_active === false) {
-      return res.status(403).json({ message: 'This account has been deactivated.' });
+    if (user) {
+      // Existing User: Authenticate with password
+      if (user.is_active === false) {
+        return res.status(403).json({ message: 'This account has been deactivated.' });
+      }
+
+      // Check if password matches
+      const passwordMatch = await bcrypt.compare(password, user.password_hash);
+      if (!passwordMatch) {
+        // Handle case where old Google users might not have a password set
+        if (user.password_hash === 'GOOGLE_AUTH_USER') {
+             return res.status(403).json({ message: 'Please reset your password to log in.' });
+        }
+        return res.status(401).json({ message: 'Invalid credentials.' });
+      }
+
+    } else {
+      // New User: Validate password strength and Create
+      if (!passwordRegex.test(password)) {
+        return res.status(400).json({
+          message: 'Password is not strong enough.',
+          details: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.'
+        });
+      }
+
+      const passwordHash = await bcrypt.hash(password, saltRounds);
+      
+      user = await userModel.createGoogleUser({
+        email,
+        firstName: given_name || 'Google',
+        lastName: family_name || 'User',
+        passwordHash
+      });
     }
 
     const appToken = jwt.sign(
