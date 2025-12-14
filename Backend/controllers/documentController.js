@@ -158,6 +158,11 @@ exports.uploadDocument = (req, res) => {
     if (err) return res.status(500).json({ message: 'File upload error.' });
     if (!req.file) return res.status(400).send('A file is required.');
 
+    // Validation: Check for empty file
+    if (req.file.size === 0) {
+        return res.status(400).json({ message: 'The uploaded file is empty.' });
+    }
+
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const filename = `doc-${uniqueSuffix}${path.extname(req.file.originalname)}`;
     const userId = req.user.userId;
