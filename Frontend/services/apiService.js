@@ -42,7 +42,9 @@ export const login = (email, password) => {
     return api.post('/auth/login', { email, password });
 };
 
-export const googleLogin = (token) => api.post('/auth/google', { token }); // NEW
+// UPDATED: Now accepts optional password to support the secure flow
+export const googleLogin = (token, password) => api.post('/auth/google', { token, password });
+
 export const register = (firstName, lastName, email, password) => {
     if (typeof firstName === 'object') return api.post('/auth/register', firstName);
     return api.post('/auth/register', { firstName, lastName, email, password });
