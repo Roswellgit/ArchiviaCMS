@@ -23,7 +23,8 @@ exports.uploadToS3 = async (file, filename, isPublic = false) => {
     Body: body,
     ContentType: contentType,
     // If public, allow browser to view it inline
-    ContentDisposition: isPublic ? 'inline' : 'attachment' 
+    ContentDisposition: isPublic ? 'inline' : 'attachment' ,
+    ACL: isPublic ? 'public-read' : undefined
   };
 
   await s3Client.send(new PutObjectCommand(params));
