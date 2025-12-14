@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import EditDocumentModal from '../../../components/EditDocumentModal'; 
-import { searchDocuments, adminDeleteDocument, adminArchiveDocument, adminUpdateDocument } from '../../../services/apiService'; 
+import { searchDocuments, adminDeleteDocument, adminArchiveDocument, adminUpdateDocument, adminRestoreDocument } from '../../../services/apiService'; 
 import { useAuth } from '../../../context/AuthContext'; 
 import { toast } from 'react-hot-toast';
 
@@ -77,6 +77,17 @@ export default function AdminDocumentManagement() {
         toast.success("Document archived.");
         handleSearch(searchTerm);
     } catch (err) { toast.error("Failed to archive."); }
+  };
+
+  // NEW: Handle Restore
+  const handleRestore = async (docId) => {
+    try {
+        await adminRestoreDocument(docId);
+        toast.success("Document restored.");
+        handleSearch(searchTerm);
+    } catch (err) {
+        toast.error("Restore failed.");
+    }
   };
 
   // === REPLACED: Native Confirm with Toast Confirm ===
@@ -190,27 +201,34 @@ export default function AdminDocumentManagement() {
                             {doc.ai_authors?.length > 0 ? doc.ai_authors.join(', ') : 'Unknown Author'} • {doc.ai_date_created || 'No Date'}
                         </p>
                     </div>
-                    <div className="flex gap-3">
+                    
+                    <div className="flex gap-3 items-center">
                         {currentTab === 'active' && (
                             <button onClick={() => handleEdit(doc)} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">Edit</button>
                         )}
                         
-                        <div className="h-4 w-px bg-slate-200"></div>
+                        {(currentTab === 'active' && user?.is_super_admin) && <div className="h-4 w-px bg-slate-200"></div>}
                         
-                        {/* Super Admins can Delete anything. Regular Admins can Archive active docs. */}
-                        {user?.is_super_admin ? (
-                            <button onClick={() => handlePermanentDelete(doc.id)} className="text-sm font-semibold text-red-600 hover:text-red-800">
-                                Delete
-                            </button>
+                        {/* Action Buttons */}
+                        {currentTab === 'active' ? (
+                             <button onClick={() => handleArchive(doc.id)} className="text-sm font-semibold text-slate-500 hover:text-orange-600">
+                                Archive
+                             </button>
                         ) : (
-                            // Regular Admin logic
-                            currentTab === 'active' ? (
-                                <button onClick={() => handleArchive(doc.id)} className="text-sm font-semibold text-slate-500 hover:text-red-600">
-                                    Archive
+                             // Allow RESTORE for both Admins and Super Admins
+                             <button onClick={() => handleRestore(doc.id)} className="text-sm font-semibold text-green-600 hover:text-green-800">
+                                Restore
+                             </button>
+                        )}
+                        
+                        {/* Super Admin Delete */}
+                        {user?.is_super_admin && (
+                            <>
+                                <div className="h-4 w-px bg-slate-200"></div>
+                                <button onClick={() => handlePermanentDelete(doc.id)} className="text-sm font-semibold text-red-600 hover:text-red-800">
+                                    Delete
                                 </button>
-                            ) : (
-                                <span className="text-xs text-slate-400 font-medium italic">Archived</span>
-                            )
+                            </>
                         )}
                     </div>
                 </div>

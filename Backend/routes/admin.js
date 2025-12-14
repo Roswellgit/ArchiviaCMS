@@ -23,6 +23,8 @@ router.put('/user-archive-requests/:id/reject', adminController.rejectUserArchiv
 router.put('/documents/:id', adminController.adminUpdateDocument);
 router.delete('/documents/:id', adminController.adminDeleteDocument);
 router.post('/documents/:id/archive', adminController.adminRequestArchive);
+// NEW: Restore Route
+router.put('/documents/:id/restore', adminController.restoreDocument);
 
 // User Deletion Requests (Documents)
 router.get('/requests', adminController.getDeletionRequests);

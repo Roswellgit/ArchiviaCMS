@@ -184,6 +184,19 @@ exports.adminRequestArchive = async (req, res) => {
     }
 };
 
+// NEW: Restore Archived Document
+exports.restoreDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await documentModel.revokeArchiveRequest(id);
+    if (!result) return res.status(404).json({ message: "Document not found." });
+    res.json({ message: "Document restored successfully." });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+};
+
 // === DOCUMENT ARCHIVE REQUESTS ===
 exports.getArchiveRequests = async (req, res) => {
   try {

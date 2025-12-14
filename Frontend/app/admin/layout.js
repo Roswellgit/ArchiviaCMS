@@ -27,7 +27,10 @@ export default function AdminLayout({ children }) {
 
   // If user is an admin, render the admin content
   return (
-    <main className="container mx-auto p-6 md:p-10 min-h-screen bg-slate-50/50">
+    <main 
+      className="container mx-auto p-6 md:p-10 min-h-screen"
+      style={{ backgroundColor: 'var(--background-color)' }}
+    >
         <div className="max-w-7xl mx-auto">
             {children}
         </div>

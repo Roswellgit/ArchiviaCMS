@@ -93,7 +93,10 @@ function HomeContent() {
     const safeTrending = Array.isArray(popularSearches) ? popularSearches : [];
 
     return (
-      <main className="flex flex-col bg-slate-50 relative overflow-x-hidden">
+      <main 
+        className="flex flex-col relative overflow-x-hidden"
+        style={{ backgroundColor: 'var(--background-color)' }}
+      >
         
         {/* Abstract Background Shapes (Fixed to viewport) */}
         <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
@@ -205,7 +208,10 @@ function HomeContent() {
 
   // --- VIEW: RESULTS LIST (APP MODE) ---
   return (
-    <main className="max-w-6xl mx-auto p-4 md:p-8 min-h-screen animate-fade-in bg-slate-50/30">
+    <main 
+      className="max-w-6xl mx-auto p-4 md:p-8 min-h-screen animate-fade-in"
+      style={{ backgroundColor: 'var(--background-color)' }}
+    >
       <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
         <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Library Results</h1>

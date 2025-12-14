@@ -1,11 +1,16 @@
 const db = require('../db');
 
-exports.findAll = async () => {
-  // ADDED: deletion_requested, archive_requested, archive_reason to SELECT
-  const { rows } = await db.query(
-    `SELECT id, title, filename, filepath, preview_urls, created_at, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, deletion_requested, archive_requested, archive_reason 
-     FROM documents ORDER BY created_at DESC`
-  );
+exports.findAll = async (includeArchived = false) => {
+  let query = `SELECT id, title, filename, filepath, preview_urls, created_at, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, deletion_requested, archive_requested, archive_reason 
+     FROM documents`;
+  
+  if (!includeArchived) {
+    query += ` WHERE archive_requested IS NOT TRUE`;
+  }
+  
+  query += ` ORDER BY created_at DESC`;
+
+  const { rows } = await db.query(query);
   return rows;
 };
 
@@ -18,15 +23,18 @@ exports.findByExactTitle = async (title) => {
   return rows[0]; 
 };
 
-exports.findByTerm = async (term) => {
+exports.findByTerm = async (term, includeArchived = false) => {
   const terms = term.trim().split(/\s+/).filter(t => t.length > 0);
   
+  const selectClause = `SELECT id, title, filename, filepath, preview_urls, created_at, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, deletion_requested, archive_requested, archive_reason FROM documents`;
+
   if (terms.length === 0) {
-      // ADDED: deletion_requested, archive_requested, archive_reason
-      const { rows } = await db.query(
-        `SELECT id, title, filename, filepath, preview_urls, created_at, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, deletion_requested, archive_requested, archive_reason 
-         FROM documents ORDER BY created_at DESC`
-      );
+      let query = selectClause;
+      if (!includeArchived) {
+          query += ` WHERE archive_requested IS NOT TRUE`;
+      }
+      query += ` ORDER BY created_at DESC`;
+      const { rows } = await db.query(query);
       return rows;
   }
 
@@ -42,11 +50,16 @@ exports.findByTerm = async (term) => {
       )`; 
   });
 
-  // ADDED: deletion_requested, archive_requested, archive_reason
+  let whereSql = whereClauses.join(' AND ');
+  
+  // Filter out archived if not admin
+  if (!includeArchived) {
+      whereSql = `(${whereSql}) AND (archive_requested IS NOT TRUE)`;
+  }
+
   const query = `
-      SELECT id, title, filename, filepath, preview_urls, created_at, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, deletion_requested, archive_requested, archive_reason 
-      FROM documents 
-      WHERE ${whereClauses.join(' AND ')} 
+      ${selectClause} 
+      WHERE ${whereSql} 
       ORDER BY created_at DESC
   `;
 
@@ -69,15 +82,19 @@ exports.create = async ({ title, filename, filepath, preview_urls, ai_keywords, 
 
 exports.getAllMetadata = async () => {
   const { rows } = await db.query(
-    `SELECT ai_authors, ai_keywords, ai_date_created, ai_journal FROM documents`
+    `SELECT ai_authors, ai_keywords, ai_date_created, ai_journal FROM documents WHERE archive_requested IS NOT TRUE`
   );
   return rows;
 };
 
-exports.filterByFacets = async ({ authors, keywords, year, journal, dateRange }) => {
+exports.filterByFacets = async ({ authors, keywords, year, journal, dateRange }, includeArchived = false) => {
   let query = `SELECT * FROM documents WHERE 1=1`;
   const params = [];
   let paramIndex = 1;
+
+  if (!includeArchived) {
+      query += ` AND (archive_requested IS NOT TRUE)`;
+  }
 
   if (authors && authors.length > 0) {
     const conditions = authors.map(a => { params.push(`%${a}%`); return `ai_authors::text ILIKE $${paramIndex++}`; });

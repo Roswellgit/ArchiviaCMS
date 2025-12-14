@@ -71,9 +71,8 @@ export const changeUserPassword = (currentPassword, newPassword) =>
 // DOCUMENT ROUTES (USER)
 // ==========================================
 
-export const uploadDocument = (formData) => api.post('/documents/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-});
+// FIX: Removed manual Content-Type header to allow browser to generate boundary
+export const uploadDocument = (formData) => api.post('/documents/upload', formData);
 
 export const getMyUploads = () => api.get('/documents/my-uploads');
 export const updateDocument = (id, data) => api.put(`/documents/${id}`, data);
@@ -115,6 +114,8 @@ export const adminDeleteDocument = (id) => api.delete(`/admin/documents/${id}`);
 export const adminRequestArchive = (id, reason) => api.post(`/admin/documents/${id}/archive`, { reason });
 export const adminArchiveDocument = adminRequestArchive; // Alias
 
+export const adminRestoreDocument = (id) => api.put(`/admin/documents/${id}/restore`);
+
 // 4. Request Approvals (Deletion)
 export const getDeletionRequests = () => api.get('/admin/requests');
 
@@ -150,19 +151,16 @@ export const adminUpdateSettings = updateSettings; // Alias
 export const resetSettings = () => api.post('/admin/settings/reset');
 export const adminResetSettings = resetSettings; // Alias
 
-export const uploadIcon = (formData) => api.post('/admin/icon-upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-});
+// FIX: Removed manual Content-Type header to allow browser to generate boundary
+export const uploadIcon = (formData) => api.post('/admin/icon-upload', formData);
 export const adminUploadIcon = uploadIcon; // Alias
 
-export const uploadBgImage = (formData) => api.post('/admin/upload-bg-image', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-});
+// FIX: Removed manual Content-Type header to allow browser to generate boundary
+export const uploadBgImage = (formData) => api.post('/admin/upload-bg-image', formData);
 export const adminUploadBgImage = uploadBgImage; // Alias
 
-export const uploadBrandIcon = (formData) => api.post('/admin/upload-brand-icon', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-});
+// FIX: Removed manual Content-Type header to allow browser to generate boundary
+export const uploadBrandIcon = (formData) => api.post('/admin/upload-brand-icon', formData);
 export const adminUploadBrandIcon = uploadBrandIcon; // Alias
 
 export const removeBgImage = () => api.post('/admin/remove-bg-image');

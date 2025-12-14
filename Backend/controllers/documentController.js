@@ -38,7 +38,11 @@ const sanitizeDocuments = async (req, documents) => {
 
 exports.getAllDocuments = async (req, res) => {
   try {
-    const rows = await documentModel.findAll();
+    // Check if user is admin or super_admin
+    const isAdmin = req.user && (req.user.is_admin || req.user.is_super_admin);
+    
+    // Pass isAdmin to findAll (true = include archived, false = exclude)
+    const rows = await documentModel.findAll(isAdmin);
     const data = await sanitizeDocuments(req, rows);
     res.json(data);
   } catch (err) {
@@ -50,12 +54,14 @@ exports.getAllDocuments = async (req, res) => {
 exports.searchDocuments = async (req, res) => {
   const { term } = req.query;
   try {
+    const isAdmin = req.user && (req.user.is_admin || req.user.is_super_admin);
     let rows;
+    
     if (!term) {
-        rows = await documentModel.findAll();
+        rows = await documentModel.findAll(isAdmin);
     } else {
         analyticsModel.logSearch(term).catch(e => console.error("Analytics error:", e));
-        rows = await documentModel.findByTerm(term);
+        rows = await documentModel.findByTerm(term, isAdmin);
     }
     const data = await sanitizeDocuments(req, rows);
     res.json(data);
@@ -67,8 +73,10 @@ exports.searchDocuments = async (req, res) => {
 
 exports.filterDocuments = async (req, res) => {
   try {
+    const isAdmin = req.user && (req.user.is_admin || req.user.is_super_admin);
     const { authors, keywords, year, journal, dateRange } = req.body;
-    const rows = await documentModel.filterByFacets({ authors, keywords, year, journal, dateRange });
+    
+    const rows = await documentModel.filterByFacets({ authors, keywords, year, journal, dateRange }, isAdmin);
     const data = await sanitizeDocuments(req, rows);
     res.json(data);
   } catch (err) {

@@ -66,6 +66,7 @@ export default function AdminUserManagement() {
       await adminUpdateUser(userId, updatedData); 
       toast.success('User updated.');
       setIsEditModalOpen(false);
+      setSelectedUser(null);
       fetchUsers(); 
     } catch (err) { toast.error('Update failed.'); }
   };
@@ -140,7 +141,14 @@ export default function AdminUserManagement() {
         {users.length === 0 && <div className="p-8 text-center text-slate-400">No active users found.</div>}
       </div>
 
-      <EditUserModal user={selectedUser} onClose={() => setIsEditModalOpen(false)} onSave={handleSave} />
+      <EditUserModal 
+        user={selectedUser} 
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedUser(null);
+        }} 
+        onSave={handleSave} 
+      />
       
       <RequestModal 
         isOpen={isArchiveModalOpen}
