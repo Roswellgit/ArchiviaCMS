@@ -313,7 +313,7 @@ exports.uploadIcon = (req, res) => {
     if (!req.file) return res.status(400).send('An icon file is required.');
     try {
       const filename = `favicon-${Date.now()}${path.extname(req.file.originalname)}`;
-      await s3Service.uploadToS3(req.file, filename);
+      await s3Service.uploadToS3(req.file, filename, true); // FIX: Pass true for public URL
       res.status(200).json({ message: 'Icon uploaded to S3.' });
     } catch (dbErr) {
       console.error(dbErr);
@@ -328,7 +328,7 @@ exports.uploadBgImage = (req, res) => {
     if (!req.file) return res.status(400).send('An image file is required.');
     try {
       const filename = `system-background-${Date.now()}${path.extname(req.file.originalname)}`;
-      const imageUrl = await s3Service.uploadToS3(req.file, filename);
+      const imageUrl = await s3Service.uploadToS3(req.file, filename, true); // FIX: Pass true for public URL
       await settingsModel.updateSettings({ backgroundImage: `url(${imageUrl})` });
       res.status(200).json({ message: 'Background image updated!', imageUrl: `url(${imageUrl})` });
     } catch (dbErr) {
@@ -344,7 +344,7 @@ exports.uploadBrandIcon = (req, res) => {
     if (!req.file) return res.status(400).send('An icon file is required.');
     try {
       const filename = `brand-icon-${Date.now()}${path.extname(req.file.originalname)}`;
-      const iconUrl = await s3Service.uploadToS3(req.file, filename);
+      const iconUrl = await s3Service.uploadToS3(req.file, filename, true);
       await settingsModel.updateSettings({ brandIconUrl: `url(${iconUrl})` });
       res.status(200).json({ message: 'Brand icon updated!', iconUrl: `url(${iconUrl})` });
     } catch (dbErr) {
