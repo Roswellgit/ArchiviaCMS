@@ -10,7 +10,7 @@ const model = 'gemini-2.0-flash';
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function generateMetadata(fileBuffer) {
-  // === MODIFIED PROMPT: Conditional Abstract Logic ===
+  // === MODIFIED PROMPT: Safety AND Content Validity Logic ===
   const prompt = `Analyze this PDF research paper (including text and visual diagrams/images). 
     
     1. Extract Metadata:
@@ -24,11 +24,14 @@ async function generateMetadata(fileBuffer) {
        - The Journal/Conference Name. Use "Unknown Source" if not found.
        - Abstract: If the paper contains an "Abstract" section, extract the text from it verbatim. If no Abstract section exists, generate a concise summary (100-150 words) of the paper.
     
-    2. Content Safety Check:
+    2. Content Safety & Validity Check:
        - Review the document for hate speech, harassment, and dangerous content.
        - Review ALL IMAGES and FIGURES for explicit sexual content, gore, or inappropriate symbols.
-       - Set 'is_safe' to false if ANY text or image violates these policies.
-       - Safety Reason: If unsafe, provide a specific explanation (e.g., "Contains explicit nudity in Figure 3").
+       - **Empty Document Check**: Verify if the document contains meaningful content (text or research diagrams). 
+         * If the document appears to be blank (white pages), contains only random noise, or has absolutely no readable text/content, consider it invalid.
+       - Set 'is_safe' to false if ANY text/image violates policies OR if the document is empty/blank.
+       - Safety Reason: If unsafe, provide a specific explanation (e.g., "Contains explicit nudity" or "Document appears to be empty/blank").
+       - **NOTE**: If the document is empty/invalid, you may fill the required Metadata fields (Title, Authors, etc.) with "N/A" or generic placeholders to satisfy the JSON schema.
     
     Return JSON.`;
 
@@ -61,7 +64,7 @@ async function generateMetadata(fileBuffer) {
             properties: {
               ai_title: { type: "string" },
               ai_authors: { type: "array", items: { type: "string" } },
-              keywords: { type: "array", items: { type: "string" } }, // Prompt enforces 4+2 logic
+              keywords: { type: "array", items: { type: "string" } }, 
               ai_date_created: { type: "string" },
               ai_journal: { type: "string" },
               ai_abstract: { type: "string" },
@@ -89,12 +92,29 @@ async function generateMetadata(fileBuffer) {
 
 exports.analyzeDocument = async (fileBuffer) => {
   try {
-    // 1. Keep pdf-parse for text logging/sanity check
+    // 1. Text Parsing & Structural Integrity Check
     const data = await pdfParse(fileBuffer); 
     const rawText = data.text; 
+    const numPages = data.numpages;
+
+    // Check 1: Physical page count check
+    if (!numPages || numPages === 0) {
+        // Return a mocked "Unsafe" response so the controller rejects it properly
+        return {
+            title: "Invalid Document",
+            ai_keywords: "[]",
+            ai_authors: "[]",
+            ai_date_created: "N/A",
+            ai_journal: "N/A",
+            ai_abstract: "N/A",
+            is_safe: false,
+            safety_reason: "The document is invalid (contains 0 pages)."
+        };
+    }
+
     console.log(`[AI Service] Text parsed (${rawText.length} chars). Executing Hybrid Analysis...`);
 
-    // 2. Send Buffer to Gemini
+    // 2. Send Buffer to Gemini (Semantic & Visual Check)
     const metadata = await generateMetadata(fileBuffer);
     
     return {
