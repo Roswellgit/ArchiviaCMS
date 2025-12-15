@@ -26,7 +26,7 @@ export default function RelatedPapersWidget({ currentDoc, allDocs = [], onSelect
       })
       .filter(doc => doc.matchScore > 0)
       .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, 2); // Top 2 for cleaner layout
+      .slice(0, 2); 
   }, [currentDoc, allDocs]);
 
   if (relatedDocs.length === 0) return null;

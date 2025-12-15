@@ -14,7 +14,7 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false); 
   const [loading, setLoading] = useState(false);
   
-  // State for Google Login Modal (only for new users)
+ 
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleUser, setGoogleUser] = useState(null);
   const [googleToken, setGoogleToken] = useState(null); 
@@ -30,7 +30,7 @@ export default function LoginForm() {
     }
   };
 
-  // Standard Email/Pass Login
+
   const performLogin = async (loginEmail, loginPassword) => {
     setLoading(true);
     const toastId = toast.loading('Logging in...');
@@ -53,7 +53,7 @@ export default function LoginForm() {
     }
   };
 
-  // Google Login Logic (called by Modal for NEW users)
+  
   const performGoogleRegistration = async (token, loginPassword) => {
     setLoading(true);
     const toastId = toast.loading('Creating account...');
@@ -89,14 +89,13 @@ export default function LoginForm() {
     performLogin(email, password);
   };
 
-  // UPDATED: Handle Google Success
-  // Attempts instant login first. Shows modal ONLY if backend says password is required (New User).
+  
   const handleGoogleSuccess = async (credentialResponse) => {
     const toastId = toast.loading('Verifying Google credentials...');
     try {
       const decoded = jwtDecode(credentialResponse.credential);
       
-      // Store details in case we need to register a new user
+    
       setGoogleUser({
         firstName: decoded.given_name,
         lastName: decoded.family_name,
@@ -106,12 +105,12 @@ export default function LoginForm() {
       });
       setGoogleToken(credentialResponse.credential);
 
-      // ATTEMPT 1: Try login WITHOUT password (for existing users)
+     
       try {
-          // Pass null/undefined for password to see if user exists
+          
           const response = await apiGoogleLogin(credentialResponse.credential); 
           
-          // If successful, it was an existing user
+          
           const userData = response.data.user;
           login(userData, response.data.token);
           toast.success(`Welcome back, ${userData.firstName}!`, { id: toastId });
@@ -120,18 +119,18 @@ export default function LoginForm() {
           }, 1000);
 
       } catch (loginError) {
-          // If backend returns 400 "Password is required...", it implies user DOES NOT exist
+         
           if (loginError.response && loginError.response.status === 400 && 
               loginError.response.data.message === 'Password is required to create a new account.') {
               
-              toast.dismiss(toastId); // Remove the "Verifying" toast
+              toast.dismiss(toastId); 
               
-              // Now we show the modal to get a password for the new account
+          
               setEmail(decoded.email); 
               setPassword(''); 
               setShowGoogleModal(true); 
           } else {
-              // Real error (e.g. Deactivated account, Google auth failed)
+              
               throw loginError;
           }
       }

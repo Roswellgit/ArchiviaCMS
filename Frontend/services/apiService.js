@@ -2,13 +2,14 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
+
 const api = axios.create({
     baseURL: API_URL,
     withCredentials: true 
 });
 
-// === KEY FIX: AXIOS INTERCEPTOR ===
-// This automatically runs before EVERY request to ensure the token is attached.
+
+
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
@@ -22,20 +23,20 @@ api.interceptors.request.use(
     }
 );
 
-// Helper to set token manually (kept for compatibility, but interceptor does the heavy lifting)
+
 export const setAuthToken = (token) => {
     if (token) {
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        localStorage.setItem('token', token); // Ensure it's in storage
+        localStorage.setItem('token', token); 
     } else {
         delete api.defaults.headers.common['Authorization'];
         localStorage.removeItem('token');
     }
 };
 
-// ==========================================
-// PUBLIC & SEARCH ROUTES
-// ==========================================
+
+
+
 
 export const searchDocuments = (term) => {
     if (!term) return api.get('/documents');
@@ -47,9 +48,9 @@ export const filterDocuments = (filters) => api.post('/documents/filter', filter
 export const getPopularSearches = () => api.get('/documents/popular');
 export const getSettings = () => api.get('/settings');
 
-// ==========================================
-// AUTHENTICATION ROUTES
-// ==========================================
+
+
+
 
 export const login = (email, password) => {
     if (typeof email === 'object') return api.post('/auth/login', email);
@@ -72,7 +73,7 @@ export const logout = () => {
 };
 export const getProfile = () => api.get('/auth/profile');
 
-// === PROFILE UPDATES ===
+
 export const updateProfile = (data) => api.put('/auth/profile', data);
 export const updateUserProfile = updateProfile; 
 
@@ -80,9 +81,9 @@ export const changePassword = (data) => api.put('/auth/change-password', data);
 export const changeUserPassword = (currentPassword, newPassword) => 
     api.put('/auth/change-password', { currentPassword, newPassword });
 
-// ==========================================
-// DOCUMENT ROUTES (USER)
-// ==========================================
+
+
+
 
 export const uploadDocument = (formData) => api.post('/documents/upload', formData);
 export const getMyUploads = () => api.get('/documents/my-uploads');
@@ -92,9 +93,9 @@ export const getCitation = (document, style) => api.post('/documents/citation', 
 export const requestDelete = (id, reason) => api.post(`/documents/${id}/request-delete`, { reason });
 export const requestDeletion = requestDelete;
 
-// ==========================================
-// ADMIN ROUTES
-// ==========================================
+
+
+
 
 export const adminDeleteUserPermanently = (id) => api.delete(`/admin/users/${id}?permanent=true`);
 export const getAdminAnalytics = () => api.get('/admin/analytics');
@@ -136,7 +137,7 @@ export const adminUpdateSettings = updateSettings;
 export const resetSettings = () => api.post('/admin/settings/reset');
 export const adminResetSettings = resetSettings;
 
-// === SIMPLIFIED UPLOADS (Interceptor handles Auth) ===
+
 export const uploadIcon = (formData) => api.post('/admin/icon-upload', formData);
 export const adminUploadIcon = uploadIcon;
 

@@ -1,21 +1,13 @@
-// Backend/models/settingsModel.js
+
 const db = require('../db');
 
-/**
- * Fetches all settings from the database.
- * @returns {Promise<Array>} A promise that resolves to an array of settings, e.g.,
- * [{setting_key: 'backgroundColor', setting_value: '#ffffff'}, ...]
- */
+
 exports.getSettings = async () => {
   const { rows } = await db.query('SELECT setting_key, setting_value FROM system_settings');
   return rows;
 };
 
-/**
- * Inserts or updates settings in the database.
- * @param {Object} settingsObject - An object of key-value pairs, e.g., { backgroundColor: '#FFF', foregroundColor: '#111' }
- * @returns {Promise<Array>} A promise that resolves to the newly updated settings.
- */
+
 exports.updateSettings = async (settingsObject) => {
   console.log('[Backend Model] Starting to update settings...'); 
 

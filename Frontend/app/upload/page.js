@@ -11,7 +11,7 @@ export default function UploadPage() {
 
   useEffect(() => {
     if (!authLoading && user?.is_super_admin) {
-        router.push('/'); // Redirect Super Admins to home
+        router.push('/'); 
     }
   }, [user, authLoading, router]);
 
@@ -19,7 +19,7 @@ export default function UploadPage() {
     router.push('/'); 
   };
 
-  // Prevent flashing the form while redirecting
+  
   if (authLoading || user?.is_super_admin) return null; 
 
   return (

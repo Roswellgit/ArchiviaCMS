@@ -11,8 +11,8 @@ export default function AdminDocumentManagement() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // NEW STATE: Tabs & Pagination
-  const [currentTab, setCurrentTab] = useState('active'); // 'active' or 'archived'
+  
+  const [currentTab, setCurrentTab] = useState('active'); 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -28,7 +28,7 @@ export default function AdminDocumentManagement() {
       setLoading(true);
       const response = await searchDocuments(term); 
       setDocuments(response.data);
-      setCurrentPage(1); // Reset page on new search
+      setCurrentPage(1); 
     } catch (err) {
       toast.error('Failed to fetch documents.');
     } finally {
@@ -41,7 +41,7 @@ export default function AdminDocumentManagement() {
     handleSearch(searchTerm);
   };
 
-  // === REPLACED: Native Prompt with Toast Input ===
+  
   const handleArchive = (docId) => {
     toast((t) => (
       <div className="flex flex-col gap-3">
@@ -68,7 +68,7 @@ export default function AdminDocumentManagement() {
           </div>
         </form>
       </div>
-    ), { duration: Infinity, position: 'top-center', icon: '📂' });
+    ), { duration: 2000, position: 'top-center', icon: '📂' });
   };
 
   const executeArchive = async (docId, reason) => {
@@ -79,7 +79,7 @@ export default function AdminDocumentManagement() {
     } catch (err) { toast.error("Failed to archive."); }
   };
 
-  // NEW: Handle Restore
+  
   const handleRestore = async (docId) => {
     try {
         await adminRestoreDocument(docId);
@@ -90,7 +90,7 @@ export default function AdminDocumentManagement() {
     }
   };
 
-  // === REPLACED: Native Confirm with Toast Confirm ===
+  
   const handlePermanentDelete = (docId) => {
     toast((t) => (
       <div className="flex flex-col gap-2">
@@ -126,7 +126,7 @@ export default function AdminDocumentManagement() {
     } catch (error) { toast.error("Save failed."); }
   };
 
-  // --- FILTERING & PAGINATION LOGIC ---
+  
   const filteredDocuments = documents.filter(doc => {
       if (currentTab === 'active') return !doc.archive_requested;
       if (currentTab === 'archived') return doc.archive_requested;
@@ -215,7 +215,7 @@ export default function AdminDocumentManagement() {
                                 Archive
                              </button>
                         ) : (
-                             // Allow RESTORE for both Admins and Super Admins
+                             
                              <button onClick={() => handleRestore(doc.id)} className="text-sm font-semibold text-green-600 hover:text-green-800">
                                 Restore
                              </button>

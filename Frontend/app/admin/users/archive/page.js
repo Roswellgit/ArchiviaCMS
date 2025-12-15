@@ -9,7 +9,7 @@ import Link from 'next/link';
 export default function ArchivedUsers() {
   const [archivedUsers, setArchivedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user: currentUser } = useAuth(); // Get current user info
+  const { user: currentUser } = useAuth(); 
 
   useEffect(() => {
     fetchArchivedUsers();
@@ -19,7 +19,7 @@ export default function ArchivedUsers() {
     try {
       setLoading(true);
       const response = await getAllUsers();
-      // Filter for inactive users
+      
       const inactive = response.data.filter(u => !u.is_active);
       setArchivedUsers(inactive);
     } catch (err) {
@@ -55,7 +55,7 @@ export default function ArchivedUsers() {
     }
   };
 
-  // === NEW: Permanent Delete Handler ===
+  
   const handleDelete = (userId) => {
     toast((t) => (
       <div className="flex flex-col gap-2">

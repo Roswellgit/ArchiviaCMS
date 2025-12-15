@@ -15,7 +15,7 @@ export default function UploadForm({ onUploadSuccess }) {
       return;
     }
 
-    // Validation: Check for empty file
+    
     if (file.size === 0) {
       toast.error('The file is empty. Please upload a valid PDF.');
       return;

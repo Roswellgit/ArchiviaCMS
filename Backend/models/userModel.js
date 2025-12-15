@@ -76,7 +76,7 @@ exports.deactivate = async (userId) => {
   return rows[0];
 };
 
-// === NEW: PERMANENT DELETE ===
+
 exports.deletePermanently = async (userId) => {
   const { rowCount } = await db.query('DELETE FROM users WHERE id = $1', [userId]);
   return rowCount;

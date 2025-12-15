@@ -19,9 +19,9 @@ export default function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // State to hold the Google token temporarily
+  
   const [googleToken, setGoogleToken] = useState(null);
-  // NEW: State to track if Google profile had complete name data
+  
   const [isGoogleDataComplete, setIsGoogleDataComplete] = useState(false);
 
   const router = useRouter(); 
@@ -114,7 +114,7 @@ const handlePasswordChange = (e) => {
         setLoading(false);
       }
     } else {
-      // Standard Email/Password Registration
+      
       const registerPromise = apiRegister(firstName, lastName, email, password);
 
       toast.promise(registerPromise, {
@@ -149,8 +149,8 @@ const handlePasswordChange = (e) => {
                   onChange={(e) => setFirstName(e.target.value)} 
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                   required 
-                  // Disable ONLY if we have a token AND the data was complete. 
-                  // If data was incomplete (missing last name), this stays enabled.
+                  
+                  
                   disabled={!!googleToken && isGoogleDataComplete} 
                 />
             </div>
@@ -162,7 +162,7 @@ const handlePasswordChange = (e) => {
                   onChange={(e) => setLastName(e.target.value)} 
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                   required 
-                  // Same logic here
+                  
                   disabled={!!googleToken && isGoogleDataComplete} 
                 />
             </div>
@@ -175,7 +175,7 @@ const handlePasswordChange = (e) => {
             onChange={(e) => setEmail(e.target.value)} 
             className={`w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all ${googleToken ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-slate-50'}`}
             required 
-            readOnly={!!googleToken} // Email always strictly locked to token
+            readOnly={!!googleToken} 
           />
         </div>
         <div>
@@ -228,7 +228,7 @@ const handlePasswordChange = (e) => {
               setEmail('');
               setPassword('');
               setConfirmPassword('');
-              setIsGoogleDataComplete(false); // Reset this
+              setIsGoogleDataComplete(false); 
             }}
             className="w-full py-2 text-sm text-slate-500 hover:text-red-600 transition-colors"
           >

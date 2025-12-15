@@ -19,8 +19,8 @@ const getSafeList = (data) => {
 };
 
 export default function PreviewModal({ document: activeDoc, onClose, allDocs, onSelectDoc }) {
-  // DEFAULT: Show Abstract first
-  const [viewMode, setViewMode] = useState('abstract'); // 'abstract' or 'preview'
+  
+  const [viewMode, setViewMode] = useState('abstract'); 
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export default function PreviewModal({ document: activeDoc, onClose, allDocs, on
     return () => { document.body.style.overflow = 'unset'; };
   }, []);
 
-  // Auto-scroll to top when mode or doc changes
+  
   useEffect(() => {
     const scrollContainer = document.getElementById('modal-content');
     if (scrollContainer) scrollContainer.scrollTop = 0;

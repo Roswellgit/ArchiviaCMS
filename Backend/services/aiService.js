@@ -10,7 +10,7 @@ const model = 'gemini-2.0-flash';
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function generateMetadata(fileBuffer) {
-  // === MODIFIED PROMPT: Safety AND Content Validity Logic ===
+  
   const prompt = `Analyze this PDF research paper (including text and visual diagrams/images). 
     
     1. Extract Metadata:
@@ -48,7 +48,7 @@ async function generateMetadata(fileBuffer) {
             parts: [
               { text: prompt },
               {
-                // Send the Buffer directly so Gemini can see images
+                
                 inlineData: {
                   mimeType: "application/pdf",
                   data: fileBuffer.toString("base64")
@@ -92,14 +92,14 @@ async function generateMetadata(fileBuffer) {
 
 exports.analyzeDocument = async (fileBuffer) => {
   try {
-    // 1. Text Parsing & Structural Integrity Check
+    
     const data = await pdfParse(fileBuffer); 
     const rawText = data.text; 
     const numPages = data.numpages;
 
-    // Check 1: Physical page count check
+    
     if (!numPages || numPages === 0) {
-        // Return a mocked "Unsafe" response so the controller rejects it properly
+        
         return {
             title: "Invalid Document",
             ai_keywords: "[]",
@@ -114,7 +114,7 @@ exports.analyzeDocument = async (fileBuffer) => {
 
     console.log(`[AI Service] Text parsed (${rawText.length} chars). Executing Hybrid Analysis...`);
 
-    // 2. Send Buffer to Gemini (Semantic & Visual Check)
+    
     const metadata = await generateMetadata(fileBuffer);
     
     return {

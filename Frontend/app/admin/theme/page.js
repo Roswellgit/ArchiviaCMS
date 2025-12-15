@@ -65,7 +65,7 @@ export default function AdminThemeManagement() {
           }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Reset</button>
         </div>
       </div>
-    ), { duration: Infinity, position: 'top-center', icon: '⚠️' });
+    ), { duration: 2000, position: 'top-center', icon: '⚠️' });
   };
 
   const executeReset = async () => {
@@ -87,7 +87,7 @@ export default function AdminThemeManagement() {
       try { await adminUploadIcon(fd); toast.success("Favicon updated."); } catch(e){ toast.error("Failed."); } finally { setLoading(false); }
   };
 
-  // UPDATED: Now accepts 'e' but doesn't require preventDefault if called from onClick
+  
   const handleBgSubmit = async (e) => {
       if (e) e.preventDefault(); 
       if (!bgImageFile) return; 
@@ -105,7 +105,7 @@ export default function AdminThemeManagement() {
       }
   };
 
-  // UPDATED: Now accepts 'e' but doesn't require preventDefault if called from onClick
+  
   const handleBrandSubmit = async (e) => {
       if (e) e.preventDefault(); 
       if (!brandIconFile) return; 

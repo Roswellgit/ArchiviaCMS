@@ -44,7 +44,7 @@ export default function MyUploadsList() {
             const reason = e.target.elements.reason.value;
             if (!reason.trim()) return toast.error("Reason is required", { id: t.id });
             
-            // Execute request
+            
             requestDeletion(doc.id, reason)
                 .then(() => {
                     toast.success("Request sent.", { id: t.id });
@@ -65,7 +65,7 @@ export default function MyUploadsList() {
           </div>
         </form>
       </div>
-    ), { duration: Infinity, position: 'top-center', icon: '🗑️' });
+    ), { duration: 2000, position: 'top-center', icon: '🗑️' });
   };
   
   if (loading) return <p className="text-center text-slate-400 p-10">Loading...</p>;

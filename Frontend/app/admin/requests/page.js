@@ -24,7 +24,7 @@ export default function AdminRequestsPage() {
 
   useEffect(() => { if(user?.is_super_admin) fetchRequests(); }, [user]);
 
-  // === REPLACED: Native Confirm with Toast ===
+  
   const handleApprove = (id) => {
     toast((t) => (
       <div className="flex flex-col gap-2">

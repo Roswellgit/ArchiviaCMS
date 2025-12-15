@@ -48,7 +48,7 @@ export default function AdminUserManagement() {
                 }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Confirm</button>
               </div>
             </div>
-        ), { duration: Infinity, position: 'top-center', icon: '⚠️' });
+        ), { duration: 2000, icon: '⚠️' });
     } else {
         // Admin Request Mode
         toast((t) => (
@@ -79,7 +79,7 @@ export default function AdminUserManagement() {
                 </div>
               </form>
             </div>
-        ), { duration: Infinity, position: 'top-center', icon: '📂' });
+        ), { duration: 2000, icon: '📂' });
     }
   };
 

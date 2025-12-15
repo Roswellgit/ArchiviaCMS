@@ -5,7 +5,7 @@ exports.logSearch = async (term) => {
   
   const cleanTerm = term.trim().toLowerCase();
   
-  // Upsert: Insert new term or increment count if it exists
+  
   const query = `
     INSERT INTO search_analytics (term, count, last_searched_at)
     VALUES ($1, 1, NOW())

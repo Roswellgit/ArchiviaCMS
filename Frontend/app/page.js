@@ -10,21 +10,21 @@ function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // URL-Driven State
+  
   const currentSearchTerm = searchParams.get('q');
   const isHeroMode = currentSearchTerm === null;
 
-  // App Data State
+  
   const [documents, setDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [heroInput, setHeroInput] = useState(''); 
 
-  // Filter/Data State
+  
   const [availableFilters, setAvailableFilters] = useState({ authors: [], keywords: [], years: [], journals: [] });
   const [popularSearches, setPopularSearches] = useState([]);
   const [selectedFilters, setSelectedFilters] = useState({ authors: [], keywords: [], year: null, journal: [], dateRange: null });
 
-  // Initial Data Load
+  
   useEffect(() => {
     Promise.all([
       getFilters(),             
@@ -38,7 +38,7 @@ function HomeContent() {
     });
   }, []);
 
-  // Trigger Search when URL changes
+  
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -61,7 +61,7 @@ function HomeContent() {
     fetchData();
   }, [currentSearchTerm, isHeroMode]);
 
-  // HANDLERS
+  
   const handleSearch = (term) => {
     if (!term) return; 
     const cleanTerm = typeof term === 'string' ? term : String(term);
@@ -88,12 +88,12 @@ function HomeContent() {
     } catch(e) { console.error(e); } finally { setIsLoading(false); }
   };
 
-  // --- VIEW: LANDING PAGE (HERO) ---
+  
   if (isHeroMode) {
     const safeTrending = Array.isArray(popularSearches) ? popularSearches : [];
 
     return (
-      // FIXED: Removed style={{ backgroundColor: ... }} so body bg shows through
+      
       <main className="flex flex-col relative overflow-x-hidden">
         
         {/* Abstract Background Shapes (Fixed to viewport) */}
@@ -203,9 +203,9 @@ function HomeContent() {
     );
   }
 
-  // --- VIEW: RESULTS LIST (APP MODE) ---
+  
   return (
-    // FIXED: Removed style={{ backgroundColor: ... }} so body bg shows through
+    
     <main className="max-w-6xl mx-auto p-4 md:p-8 min-h-screen animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
         <div>

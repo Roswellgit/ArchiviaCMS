@@ -11,7 +11,7 @@ export default function Navbar() {
   const router = useRouter(); 
   
   const [isDropdownOpen, setIsDropdownOpen] = useState(false); 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // New state for mobile menu
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); 
 
   const isAuthPage = pathname === '/login' || pathname === '/register';
   const shouldShowLoginLink = !isAuthenticated && pathname !== '/login' && pathname !== '/register';
