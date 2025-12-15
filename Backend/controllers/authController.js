@@ -9,7 +9,7 @@ const db = require('../db');
 const saltRounds = 10;
 const JWT_SECRET = process.env.JWT_SECRET;
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-// Updated Regex: Allows any special character (not just specific ones)
+
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])[A-Za-z\d\W]{8,}$/;
 
 exports.register = async (req, res) => {
@@ -175,16 +175,14 @@ exports.googleLogin = async (req, res) => {
     let user = await userModel.findByEmail(email);
 
     if (user) {
-      // === EXISTING USER: DIRECT LOGIN ===
-      // If user exists, we trust the Google Token. No password check required.
+   
       
       if (user.is_active === false) {
         return res.status(403).json({ message: 'This account has been deactivated.' });
       }
 
     } else {
-      // === NEW USER: REGISTER WITH PASSWORD ===
-      // If user does not exist, we must create one, so password IS required here.
+ 
 
       if (!password) {
         return res.status(400).json({ message: 'Password is required to create a new account.' });

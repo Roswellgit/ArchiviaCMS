@@ -38,10 +38,10 @@ const sanitizeDocuments = async (req, documents) => {
 
 exports.getAllDocuments = async (req, res) => {
   try {
-    // Check if user is admin or super_admin
+    
     const isAdmin = req.user && (req.user.is_admin || req.user.is_super_admin);
     
-    // Pass isAdmin to findAll (true = include archived, false = exclude)
+    
     const rows = await documentModel.findAll(isAdmin);
     const data = await sanitizeDocuments(req, rows);
     res.json(data);
@@ -158,7 +158,7 @@ exports.uploadDocument = (req, res) => {
     if (err) return res.status(500).json({ message: 'File upload error.' });
     if (!req.file) return res.status(400).send('A file is required.');
 
-    // Validation: Check for empty file
+    
     if (req.file.size === 0) {
         return res.status(400).json({ message: 'The uploaded file is empty.' });
     }
@@ -168,34 +168,33 @@ exports.uploadDocument = (req, res) => {
     const userId = req.user.userId;
 
     try {
-        // === SPEED OPTIMIZATION: Start all tasks simultaneously ===
         
-        // 1. Start AI Analysis (now includes Safety Check)
+        
+        
         const analysisPromise = aiService.analyzeDocument(req.file.buffer);
 
-        // 2. Start Preview Generation (Fail-safe: returns [] on error)
+        
         const previewPromise = previewService.generatePreviews(req.file.buffer, filename)
             .catch(err => {
                 console.error("Preview generation failed silently:", err.message);
                 return [];
             });
 
-        // 3. Start S3 Upload
+        
         const s3Promise = s3Service.uploadToS3(req.file, `documents/${filename}`);
 
-        // Wait for ALL tasks to complete
+     
         const [metadata, previewUrls, fileKey] = await Promise.all([
             analysisPromise,
             previewPromise,
             s3Promise
         ]);
 
-        // === CONTENT MODERATION CHECK ===
-        // If the AI says it's unsafe, we reject it and delete the S3 file we just uploaded.
+
         if (metadata.is_safe === false) {
             console.warn(`[Content Moderation] Upload rejected: ${metadata.safety_reason}`);
             
-            // Cleanup: Delete the file from S3 immediately
+            
             if (s3Service.deleteFromS3) {
                 await s3Service.deleteFromS3(fileKey);
             }
@@ -205,11 +204,11 @@ exports.uploadDocument = (req, res) => {
             });
         }
 
-        // === POST-PROCESS CHECKS (Duplicates) ===
+
         if (metadata.title) {
             const existingDoc = await documentModel.findByExactTitle(metadata.title);
             if (existingDoc) {
-                // Cleanup S3 on duplicate
+         
                 if (s3Service.deleteFromS3) {
                     await s3Service.deleteFromS3(fileKey);
                 }
@@ -219,7 +218,7 @@ exports.uploadDocument = (req, res) => {
             }
         }
 
-        // Prepare data for DB (exclude safety fields)
+
         const documentData = {
           title: metadata.title,
           ai_keywords: metadata.ai_keywords,

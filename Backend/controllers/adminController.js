@@ -6,7 +6,6 @@ const settingsModel = require('../models/settingsModel');
 const fileUploadService = require('../services/fileUploadService');
 const s3Service = require('../services/s3Service');
 
-// === DASHBOARD ANALYTICS ===
 exports.getDashboardStats = async (req, res) => {
   try {
     const users = await userModel.findAll();
@@ -27,7 +26,7 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
-// === USER MANAGEMENT ===
+
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await userModel.findAll();
@@ -54,12 +53,12 @@ exports.updateUser = async (req, res) => {
   }
 };
 
-// === UPDATED: DELETE USER ===
+
 exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
     
-    // 1. Permanent Deletion (Check query param ?permanent=true)
+    
     if (req.query.permanent === 'true') {
         if (!req.user.is_super_admin) {
             return res.status(403).json({ message: "Only Super Admins can permanently delete users." });
@@ -69,14 +68,14 @@ exports.deleteUser = async (req, res) => {
         return res.json({ message: 'User permanently deleted.' });
     }
     
-    // 2. Deactivation (Super Admin)
+
     if (req.user.is_super_admin) {
         const deactivatedUser = await userModel.deactivate(id);
         if (!deactivatedUser) return res.status(404).json({ message: 'User not found.' });
         return res.json({ message: 'User deactivated successfully.' });
     }
 
-    // 3. Request Archive (Regular Admin)
+   
     const { reason } = req.body;
     if (!reason) return res.status(400).json({ message: "Reason required for archiving request." });
 
@@ -103,7 +102,7 @@ exports.reactivateUser = async (req, res) => {
   }
 };
 
-// === USER ARCHIVE REQUESTS ===
+
 exports.getUserArchiveRequests = async (req, res) => {
   try {
     const requests = await userModel.findAllArchiveRequests();
@@ -139,7 +138,7 @@ exports.rejectUserArchive = async (req, res) => {
   }
 };
 
-// === DOCUMENT MANAGEMENT ===
+
 exports.adminUpdateDocument = async (req, res) => {
   try {
     const { id } = req.params;
@@ -184,7 +183,7 @@ exports.adminRequestArchive = async (req, res) => {
     }
 };
 
-// NEW: Restore Archived Document
+
 exports.restoreDocument = async (req, res) => {
   try {
     const { id } = req.params;
@@ -197,7 +196,7 @@ exports.restoreDocument = async (req, res) => {
   }
 };
 
-// === DOCUMENT ARCHIVE REQUESTS ===
+
 exports.getArchiveRequests = async (req, res) => {
   try {
     const requests = await documentModel.findAllArchiveRequests();
@@ -237,7 +236,7 @@ exports.rejectArchive = async (req, res) => {
   }
 };
 
-// === DOCUMENT DELETION REQUESTS ===
+
 exports.getDeletionRequests = async (req, res) => {
   try {
     const requests = await documentModel.findAllDeletionRequests();
@@ -277,7 +276,7 @@ exports.rejectDeletion = async (req, res) => {
   }
 };
 
-// === THEME & SETTINGS ===
+
 exports.updateSettings = async (req, res) => {
   try {
     const newSettings = req.body;
@@ -313,7 +312,7 @@ exports.uploadIcon = (req, res) => {
     if (!req.file) return res.status(400).send('An icon file is required.');
     try {
       const filename = `favicon-${Date.now()}${path.extname(req.file.originalname)}`;
-      await s3Service.uploadToS3(req.file, filename, true); // FIX: Pass true for public URL
+      await s3Service.uploadToS3(req.file, filename, true);   
       res.status(200).json({ message: 'Icon uploaded to S3.' });
     } catch (dbErr) {
       console.error(dbErr);
@@ -328,7 +327,7 @@ exports.uploadBgImage = (req, res) => {
     if (!req.file) return res.status(400).send('An image file is required.');
     try {
       const filename = `system-background-${Date.now()}${path.extname(req.file.originalname)}`;
-      const imageUrl = await s3Service.uploadToS3(req.file, filename, true); // FIX: Pass true for public URL
+      const imageUrl = await s3Service.uploadToS3(req.file, filename, true); 
       await settingsModel.updateSettings({ backgroundImage: `url(${imageUrl})` });
       res.status(200).json({ message: 'Background image updated!', imageUrl: `url(${imageUrl})` });
     } catch (dbErr) {

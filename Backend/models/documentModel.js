@@ -14,7 +14,7 @@ exports.findAll = async (includeArchived = false) => {
   return rows;
 };
 
-// === NEW: DUPLICATE CHECK ===
+
 exports.findByExactTitle = async (title) => {
   const { rows } = await db.query(
     'SELECT id FROM documents WHERE LOWER(title) = LOWER($1)',
@@ -52,7 +52,7 @@ exports.findByTerm = async (term, includeArchived = false) => {
 
   let whereSql = whereClauses.join(' AND ');
   
-  // Filter out archived if not admin
+  
   if (!includeArchived) {
       whereSql = `(${whereSql}) AND (archive_requested IS NOT TRUE)`;
   }
@@ -163,7 +163,7 @@ exports.adminDeleteById = async (id) => {
     return rowCount;
 };
 
-// 1. User submits a request (USER SIDE)
+
 exports.submitDeletionRequest = async (id, userId, reason) => {
   const { rows } = await db.query(
     `UPDATE documents 
@@ -175,7 +175,7 @@ exports.submitDeletionRequest = async (id, userId, reason) => {
   return rows[0];
 };
 
-// 2. Find all User Deletion Requests
+
 exports.findAllDeletionRequests = async () => {
   const { rows } = await db.query(
     `SELECT id, title, filename, user_id, deletion_reason, created_at, ai_authors 
@@ -186,7 +186,7 @@ exports.findAllDeletionRequests = async () => {
   return rows;
 };
 
-// 3. Revoke User Deletion Request
+
 exports.revokeDeletionRequest = async (id) => {
   const { rows } = await db.query(
     `UPDATE documents 
@@ -198,7 +198,7 @@ exports.revokeDeletionRequest = async (id) => {
   return rows[0];
 };
 
-// === ADMIN ARCHIVE REQUESTS ===
+
 
 exports.submitArchiveRequest = async (id, reason) => {
   const { rows } = await db.query(
@@ -232,7 +232,7 @@ exports.revokeArchiveRequest = async (id) => {
   return rows[0];
 };
 
-// === AUTO-ARCHIVE FUNCTION ===
+
 exports.autoArchiveOldDocuments = async () => {
   try {
     const { rowCount } = await db.query(

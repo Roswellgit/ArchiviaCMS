@@ -1,6 +1,6 @@
 const express = require('express');
 const authController = require('../controllers/authController');
-const authMiddleware = require('../middleware/authMiddleware'); // Ensure this is imported
+const authMiddleware = require('../middleware/authMiddleware'); 
 const router = express.Router();
 
 router.post('/register', authController.register);
@@ -10,7 +10,7 @@ router.post('/google', authController.googleLogin);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 router.get('/profile', authMiddleware, authController.getProfile);
-// Protected Routes
+
 router.put('/profile', authMiddleware, authController.updateProfile);
 router.put('/change-password', authMiddleware, authController.changePassword);
 

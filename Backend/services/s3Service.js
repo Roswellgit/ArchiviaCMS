@@ -29,7 +29,7 @@ exports.uploadToS3 = async (file, filename, isPublic = false) => {
   await s3Client.send(new PutObjectCommand(params));
 
   if (isPublic) {
-    // Ensure AWS_BUCKET_REGION is defined in your .env file!
+    
     return `https://${BUCKET_NAME}.s3.${process.env.AWS_BUCKET_REGION}.amazonaws.com/${filename}`;
   }
 
