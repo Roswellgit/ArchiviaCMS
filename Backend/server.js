@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 if (!process.env.JWT_SECRET || !process.env.DATABASE_URL) {
   console.error("FATAL ERROR: Missing required environment variables.");
   process.exit(1);
