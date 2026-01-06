@@ -569,16 +569,29 @@ exports.rejectDocument = async (req, res) => {
 
 exports.getFormOptions = async (req, res) => {
   try {
-    const rows = await optionModel.getAll();
+    // UPDATED QUERY: Order by Type first, then by Value (Alphabetical)
+    // If you want them sorted by when you added them, change 'value ASC' to 'id ASC'
+    const query = `SELECT * FROM form_options ORDER BY type, value ASC`;
     
-    // Transform flat DB rows into grouped object for frontend
+    const { rows } = await pool.query(query);
+    
+    // Transform flat DB rows into grouped object
     const grouped = rows.reduce((acc, item) => {
-      // simple pluralization: role -> roles, strand -> strands
-      const key = item.type + 's'; 
+      const key = item.type + 's'; // e.g., 'roles', 'strands'
       if (!acc[key]) acc[key] = [];
       acc[key].push(item.value);
       return acc;
     }, { roles: [], strands: [], yearLevels: [] });
+
+    // OPTIONAL: Custom Sort for Year Levels (Because "Grade 10" comes before "Grade 2" alphabetically)
+    if (grouped.yearLevels) {
+        grouped.yearLevels.sort((a, b) => {
+            // Extract the number from "Grade 7"
+            const numA = parseInt(a.replace(/\D/g, '')) || 0;
+            const numB = parseInt(b.replace(/\D/g, '')) || 0;
+            return numA - numB;
+        });
+    }
 
     res.json(grouped);
   } catch (err) {
