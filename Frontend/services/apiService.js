@@ -85,7 +85,9 @@ export const changeUserPassword = (currentPassword, newPassword) =>
 
 
 
-export const uploadDocument = (formData) => api.post('/documents/upload', formData);
+export const uploadDocument = (formData, onUploadProgress) => api.post('/documents/upload', formData, {
+    onUploadProgress
+});
 export const getMyUploads = () => api.get('/documents/my-uploads');
 export const updateDocument = (id, data) => api.put(`/documents/${id}`, data);
 export const deleteDocument = (id) => api.delete(`/documents/${id}`);
@@ -138,13 +140,19 @@ export const resetSettings = () => api.post('/admin/settings/reset');
 export const adminResetSettings = resetSettings;
 
 
-export const uploadIcon = (formData) => api.post('/admin/icon-upload', formData);
+export const uploadIcon = (formData, onUploadProgress) => api.post('/admin/icon-upload', formData, {
+    onUploadProgress
+});
 export const adminUploadIcon = uploadIcon;
 
-export const uploadBgImage = (formData) => api.post('/admin/upload-bg-image', formData);
+export const uploadBgImage = (formData, onUploadProgress) => api.post('/admin/upload-bg-image', formData, {
+    onUploadProgress
+});
 export const adminUploadBgImage = uploadBgImage;
 
-export const uploadBrandIcon = (formData) => api.post('/admin/upload-brand-icon', formData);
+export const uploadBrandIcon = (formData, onUploadProgress) => api.post('/admin/upload-brand-icon', formData, {
+    onUploadProgress
+});
 export const adminUploadBrandIcon = uploadBrandIcon;
 
 export const removeBgImage = () => api.post('/admin/remove-bg-image');

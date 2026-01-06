@@ -7,9 +7,10 @@ import { toast } from 'react-hot-toast';
 export default function UploadForm({ onUploadSuccess }) {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false); 
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     if (!file) {
       toast.error('Please select a file to upload.'); 
       return;
@@ -22,14 +23,19 @@ export default function UploadForm({ onUploadSuccess }) {
     }
 
     setLoading(true); 
+    setUploadProgress(0);
     const formData = new FormData();
     formData.append('file', file);
 
-    toast.promise(uploadDocument(formData), {
+    toast.promise(uploadDocument(formData, (progressEvent) => {
+      const total = progressEvent.total || progressEvent.loaded;
+      const percentCompleted = total > 0 ? Math.round((progressEvent.loaded * 100) / total) : 0;
+      setUploadProgress(percentCompleted);
+    }), {
         loading: 'Uploading and analyzing document...',
         success: (response) => {
           setFile(null);
-          e.target.reset(); 
+          event.target.reset(); 
           if (onUploadSuccess) onUploadSuccess();
           return `Successfully uploaded: ${response.data.title}`;
         },
@@ -52,7 +58,7 @@ export default function UploadForm({ onUploadSuccess }) {
           <input
             type="file"
             id="file"
-            onChange={(e) => setFile(e.target.files[0])}
+            onChange={(event) => setFile(event.target.files[0])}
             accept="application/pdf"
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             required
@@ -71,6 +77,18 @@ export default function UploadForm({ onUploadSuccess }) {
              )}
           </div>
         </div>
+
+        {loading && (
+          <div className="w-full">
+            <div className="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Uploading...</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="w-full bg-slate-200 rounded-full h-2.5">
+              <div className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300 ease-out" style={{ width: `${uploadProgress}%` }}></div>
+            </div>
+          </div>
+        )}
 
         <button
           type="submit"
