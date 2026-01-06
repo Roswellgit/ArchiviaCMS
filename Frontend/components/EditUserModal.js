@@ -138,31 +138,31 @@ export default function EditUserModal({ user, onClose, onUpdateSuccess }) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">First Name</label>
-                <input name="first_name" value={formData.first_name} onChange={handleChange} className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required />
+                <input name="first_name" 
+                value={formData.first_name} 
+                onChange={handleChange} 
+                className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Last Name</label>
-                <input name="last_name" value={formData.last_name} onChange={handleChange} className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required />
+                <input name="last_name" 
+                value={formData.last_name} 
+                onChange={handleChange} 
+                className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required />
               </div>
             </div>
             
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Email</label>
-              <input name="email" value={formData.email} onChange={handleChange} className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required />
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
+                Email
+              </label>
+              <input
+                name="email"
+                value={formData.email}
+                readOnly
+                className="w-full p-2.5 border border-slate-200 rounded-lg bg-slate-100 text-slate-500 cursor-not-allowed"
+              />
             </div>
-
-            {/* Added Password Field (Optional change) */}
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">New Password (Optional)</label>
-              <input type="password" name="password" placeholder="Leave blank to keep current" value={formData.password || ''} onChange={handleChange} className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            </div>
-
-            {/* Note: Ideally, users shouldn't be able to edit their own Admin status. 
-                The backend implementation I provided ignores this field for security. */}
-            {/* <div className="flex items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
-              <input type="checkbox" id="is_admin" name="is_admin" checked={formData.is_admin} onChange={handleChange} className="h-5 w-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-              <label htmlFor="is_admin" className="ml-3 block text-sm font-semibold text-slate-700">Grant Administrator Privileges</label>
-            </div> */}
 
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" onClick={onClose} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50">Cancel</button>
