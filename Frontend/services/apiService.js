@@ -105,6 +105,8 @@ export const requestDeletion = requestDelete;
 export const adminDeleteUserPermanently = (id) => api.delete(`/admin/users/${id}?permanent=true`);
 export const getAdminAnalytics = () => api.get('/admin/analytics');
 export const getAllUsers = () => api.get('/admin/users');
+export const getPendingDocuments = () => api.get('/admin/documents/pending');
+export const getAdminDocuments = () => api.get('/admin/documents');
 export const updateUser = (id, data) => api.put(`/admin/users/${id}`, data);
 export const adminUpdateUser = updateUser;
 export const deleteUser = (id, data = {}) => api.delete(`/admin/users/${id}`, { data });

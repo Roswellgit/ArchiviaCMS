@@ -1,4 +1,5 @@
 const path = require('path');
+const bcrypt = require('bcrypt'); 
 const userModel = require('../models/userModel');
 const documentModel = require('../models/documentModel');
 const analyticsModel = require('../models/analyticsModel');
@@ -6,10 +7,112 @@ const settingsModel = require('../models/settingsModel');
 const fileUploadService = require('../services/fileUploadService');
 const s3Service = require('../services/s3Service');
 
+// --- HIERARCHICAL CREATION ---
+
+exports.createAccount = async (req, res) => {
+  try {
+    const { firstName, lastName, email, password, role } = req.body;
+    const requester = req.user; 
+
+    if (!firstName || !lastName || !email || !password || !role) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // UPDATED: Added new roles here
+    const validRoles = [
+      'student', 
+      'adviser', 
+      'admin', 
+      'superadmin', 
+      'principal', 
+      'assistant_principal', 
+      'research_coordinator'
+    ];
+
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ message: 'Invalid role selected.' });
+    }
+
+    // --- PERMISSION LOGIC ---
+
+    // 1. Students cannot create accounts
+    if (!requester.is_admin && !requester.is_super_admin && !requester.is_adviser) {
+        return res.status(403).json({ message: 'Permission denied.' });
+    }
+
+    // 2. Advisers: Can ONLY create Students
+    if (requester.is_adviser && !requester.is_admin && !requester.is_super_admin) {
+        if (role !== 'student') {
+            return res.status(403).json({ message: 'Advisers can only create Student accounts.' });
+        }
+    }
+
+    // 3. Admins/Principals/etc: Can create Advisers and Students
+    // They CANNOT create other Admins, Principals, etc.
+    if (requester.is_admin && !requester.is_super_admin) {
+        // List of roles that are considered "Admin Level" and thus restricted
+        const restrictedRoles = ['admin', 'superadmin', 'principal', 'assistant_principal', 'research_coordinator'];
+        if (restrictedRoles.includes(role)) {
+            return res.status(403).json({ message: 'Admins/Principals cannot create other Admin-level accounts.' });
+        }
+    }
+
+    // 4. Super Admins: Can create ANY role.
+
+    // --- EXECUTION ---
+    const existingUser = await userModel.findByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({ message: 'User already exists with this email.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const newUser = await userModel.createAccount({
+      firstName,
+      lastName,
+      email,
+      passwordHash,
+      role
+    });
+
+    res.status(201).json({
+      message: `${role.replace('_', ' ')} created successfully.`,
+      user: { id: newUser.id, email: newUser.email, role }
+    });
+
+  } catch (error) {
+    console.error('Error creating account:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+exports.createGroup = async (req, res) => {
+  try {
+    const { name } = req.body;
+    const requester = req.user;
+
+    if (!requester.is_adviser && !requester.is_admin && !requester.is_super_admin) {
+        return res.status(403).json({ message: 'Only Advisers or Admins can create groups.' });
+    }
+
+    if (!name) {
+      return res.status(400).json({ message: 'Group name is required.' });
+    }
+
+    const newGroup = await userModel.createGroup(name, requester.id);
+
+    res.status(201).json({ message: 'Group created successfully', group: newGroup });
+
+  } catch (error) {
+    console.error('Error creating group:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+// ... (KEEP ALL EXISTING METHODS BELOW EXACTLY AS THEY WERE) ...
 exports.getDashboardStats = async (req, res) => {
   try {
     const users = await userModel.findAll();
-    // Use true to fetch everything (including pending/archived) for stats
     const documents = await documentModel.findAll(true); 
     const topSearches = await analyticsModel.getTopSearches(5); 
 
@@ -17,12 +120,9 @@ exports.getDashboardStats = async (req, res) => {
     const activeUsers = users.filter(u => u.is_active).length;
     const totalDocuments = documents.length;
     
-    // Existing requests
     const deletionRequests = documents.filter(d => d.deletion_requested).length;
     const archiveRequests = documents.filter(d => d.archive_requested).length;
     const userRequests = users.filter(u => u.archive_requested).length;
-    
-    // NEW: Count pending documents
     const pendingDocs = documents.filter(d => d.status === 'pending').length;
 
     const pendingRequests = deletionRequests + archiveRequests + userRequests + pendingDocs;
@@ -33,8 +133,6 @@ exports.getDashboardStats = async (req, res) => {
     res.status(500).send('Server error fetching stats');
   }
 };
-
-// --- NEW APPROVAL WORKFLOW METHODS ---
 
 exports.getPendingDocuments = async (req, res) => {
   try {
@@ -61,8 +159,6 @@ exports.approveDocument = async (req, res) => {
 exports.rejectDocument = async (req, res) => {
   try {
     const { id } = req.params;
-    // We update status to rejected. 
-    // Alternatively, you could use deleteById if you want it gone forever.
     const doc = await documentModel.updateStatus(id, 'rejected');
     if (!doc) return res.status(404).json({ message: "Document not found" });
     res.json({ message: 'Document rejected', doc });
@@ -71,8 +167,6 @@ exports.rejectDocument = async (req, res) => {
     res.status(500).json({ error: 'Failed to reject document' });
   }
 };
-
-// -------------------------------------
 
 exports.getAllUsers = async (req, res) => {
   try {
@@ -88,7 +182,7 @@ exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const { first_name, last_name, email, is_admin } = req.body; 
-    if (typeof is_admin !== 'boolean') return res.status(400).json({ message: 'Invalid admin status specified. Must be true or false.' });
+    if (typeof is_admin !== 'boolean') return res.status(400).json({ message: 'Invalid admin status specified.' });
 
     const updatedUser = await userModel.updateUserDetails(id, { first_name, last_name, email, is_admin });
     if (!updatedUser) return res.status(404).json({ message: 'User not found.' });
@@ -99,7 +193,6 @@ exports.updateUser = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
-
 
 exports.deleteUser = async (req, res) => {
   try {
@@ -146,7 +239,6 @@ exports.reactivateUser = async (req, res) => {
   }
 };
 
-
 exports.getUserArchiveRequests = async (req, res) => {
   try {
     const requests = await userModel.findAllArchiveRequests();
@@ -181,7 +273,6 @@ exports.rejectUserArchive = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
-
 
 exports.adminUpdateDocument = async (req, res) => {
   try {
@@ -227,7 +318,6 @@ exports.adminRequestArchive = async (req, res) => {
     }
 };
 
-
 exports.restoreDocument = async (req, res) => {
   try {
     const { id } = req.params;
@@ -239,7 +329,6 @@ exports.restoreDocument = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
-
 
 exports.getArchiveRequests = async (req, res) => {
   try {
@@ -280,7 +369,6 @@ exports.rejectArchive = async (req, res) => {
   }
 };
 
-
 exports.getDeletionRequests = async (req, res) => {
   try {
     const requests = await documentModel.findAllDeletionRequests();
@@ -319,7 +407,6 @@ exports.rejectDeletion = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
-
 
 exports.updateSettings = async (req, res) => {
   try {

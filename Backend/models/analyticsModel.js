@@ -26,4 +26,4 @@ exports.getTopSearches = async (limit = 5) => {
     [limit]
   );
   return rows;
-};
+};  

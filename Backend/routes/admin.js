@@ -1,8 +1,18 @@
 const express = require('express');
 const adminController = require('../controllers/adminController');
 const adminMiddleware = require('../middleware/adminMiddleware');
+const authMiddleware = require('../middleware/authMiddleware'); // Import this
 const router = express.Router();
 
+// --- ACCOUNT & GROUP CREATION (RBAC) ---
+// We use authMiddleware here so Advisers (who might not be "Admins") can access these.
+// The Controller handles the strict permission logic (Super Admin > Admin > Adviser).
+router.post('/create-account', authMiddleware, adminController.createAccount);
+router.post('/create-group', authMiddleware, adminController.createGroup);
+
+// ------------------------------------------
+// PROTECT ALL ROUTES BELOW THIS LINE WITH ADMIN MIDDLEWARE
+// ------------------------------------------
 router.use(adminMiddleware);
 
 // --- Analytics ---

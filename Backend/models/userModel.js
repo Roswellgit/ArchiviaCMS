@@ -1,17 +1,67 @@
 const db = require('../db');
 
+// Updated to fetch 'role'
 exports.findByEmail = async (email) => {
   const { rows } = await db.query(
-    'SELECT id, first_name, last_name, email, password_hash, is_admin, is_super_admin, is_verified, otp_code, otp_expires, is_active FROM users WHERE email = $1', 
+    'SELECT id, first_name, last_name, email, password_hash, role, is_admin, is_super_admin, is_adviser, is_verified, otp_code, otp_expires, is_active FROM users WHERE email = $1', 
     [email]
   );
   return rows[0];
 };
 
+// --- UPDATED ACCOUNT CREATION ---
+
+exports.createAccount = async ({ firstName, lastName, email, passwordHash, role }) => {
+  let isAdmin = false;
+  let isSuperAdmin = false;
+  let isAdviser = false;
+
+  // Determine flags based on role
+  switch (role) {
+    case 'superadmin':
+      isSuperAdmin = true;
+      isAdmin = true;
+      break;
+    // These are all Admin-level roles
+    case 'admin':
+    case 'principal':
+    case 'assistant_principal':
+    case 'research_coordinator':
+      isAdmin = true;
+      break;
+    case 'adviser':
+      isAdviser = true;
+      break;
+    default:
+      // 'student' or others default to all false
+      role = 'student'; // Ensure we save 'student' string if undefined
+      break;
+  }
+
+  const { rows } = await db.query(
+    `INSERT INTO users 
+      (first_name, last_name, email, password_hash, role, is_admin, is_super_admin, is_adviser, is_verified, is_active) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, TRUE) 
+     RETURNING id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser`,
+    [firstName, lastName, email, passwordHash, role, isAdmin, isSuperAdmin, isAdviser]
+  );
+  return rows[0];
+};
+
+exports.createGroup = async (name, adviserId) => {
+  const { rows } = await db.query(
+    'INSERT INTO groups (name, adviser_id) VALUES ($1, $2) RETURNING *',
+    [name, adviserId]
+  );
+  return rows[0];
+};
+
+// --- EXISTING METHODS (Updated to handle 'role' column default) ---
+
 exports.createWithOTP = async ({ firstName, lastName, email, passwordHash, otp, otpExpires }) => {
   const { rows } = await db.query(
-    `INSERT INTO users (first_name, last_name, email, password_hash, otp_code, otp_expires, is_verified, is_active) 
-     VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE) 
+    `INSERT INTO users (first_name, last_name, email, password_hash, otp_code, otp_expires, is_verified, is_active, role) 
+     VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, 'student') 
      RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
     [firstName, lastName, email, passwordHash, otp, otpExpires]
   );
@@ -20,7 +70,9 @@ exports.createWithOTP = async ({ firstName, lastName, email, passwordHash, otp, 
 
 exports.create = async ({ firstName, lastName, email, passwordHash }) => {
   const { rows } = await db.query(
-    'INSERT INTO users (first_name, last_name, email, password_hash, is_active) VALUES ($1, $2, $3, $4, TRUE) RETURNING id, first_name, last_name, email, is_admin, is_super_admin',
+    `INSERT INTO users (first_name, last_name, email, password_hash, is_active, role) 
+     VALUES ($1, $2, $3, $4, TRUE, 'student') 
+     RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
     [firstName, lastName, email, passwordHash]
   );
   return rows[0];
@@ -33,14 +85,16 @@ exports.markVerified = async (userId) => {
   );
 };
 
+// Updated to fetch 'role'
 exports.findAll = async () => {
-  const { rows } = await db.query('SELECT id, first_name, last_name, email, is_admin, is_super_admin, is_verified, is_active, archive_requested FROM users ORDER BY last_name');
+  const { rows } = await db.query('SELECT id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser, is_verified, is_active, archive_requested FROM users ORDER BY last_name');
   return rows;
 };
 
 exports.updateAdminStatus = async (userId, isAdminBoolean) => {
+  // If making admin, we might default role to 'admin' if it was 'student'
   const { rows } = await db.query(
-    'UPDATE users SET is_admin = $1 WHERE id = $2 RETURNING id, first_name, last_name, email, is_admin, is_super_admin',
+    'UPDATE users SET is_admin = $1 WHERE id = $2 RETURNING id, first_name, last_name, email, is_admin',
     [isAdminBoolean, userId]
   );
   return rows[0];
@@ -51,7 +105,7 @@ exports.updateUserDetails = async (userId, { first_name, last_name, email, is_ad
     `UPDATE users 
      SET first_name = $1, last_name = $2, email = $3, is_admin = $4 
      WHERE id = $5 
-     RETURNING id, first_name, last_name, email, is_admin, is_active, is_super_admin`,
+     RETURNING id, first_name, last_name, email, role, is_admin, is_active`,
     [first_name, last_name, email, is_admin, userId]
   );
   return rows[0];
@@ -62,7 +116,7 @@ exports.updateProfile = async (userId, { firstName, lastName, email }) => {
     `UPDATE users 
      SET first_name = $1, last_name = $2, email = $3
      WHERE id = $4 
-     RETURNING id, first_name, last_name, email, is_admin, is_active, is_super_admin`,
+     RETURNING id, first_name, last_name, email, role, is_admin`,
     [firstName, lastName, email, userId]
   );
   return rows[0];
@@ -99,7 +153,7 @@ exports.submitArchiveRequest = async (id, reason) => {
 
 exports.findAllArchiveRequests = async () => {
   const { rows } = await db.query(
-    'SELECT id, first_name, last_name, email, archive_reason FROM users WHERE archive_requested = TRUE ORDER BY last_name'
+    'SELECT id, first_name, last_name, email, role, archive_reason FROM users WHERE archive_requested = TRUE ORDER BY last_name'
   );
   return rows;
 };
@@ -115,9 +169,9 @@ exports.revokeArchiveRequest = async (id) => {
 exports.createGoogleUser = async ({ email, firstName, lastName, passwordHash }) => {
   const { rows } = await db.query(
     `INSERT INTO users 
-     (first_name, last_name, email, password_hash, is_verified, is_active) 
-     VALUES ($1, $2, $3, $4, TRUE, TRUE) 
-     RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
+     (first_name, last_name, email, password_hash, is_verified, is_active, role) 
+     VALUES ($1, $2, $3, $4, TRUE, TRUE, 'student') 
+     RETURNING id, first_name, last_name, email, is_admin`,
     [firstName, lastName, email, passwordHash] 
   );
   return rows[0];
@@ -145,15 +199,14 @@ exports.updatePassword = async (userId, passwordHash) => {
   );
 };
 
+// Updated to fetch 'role'
 exports.findById = async (id) => {
   const { rows } = await db.query(
-    'SELECT id, first_name, last_name, email, is_admin, is_super_admin, is_active FROM users WHERE id = $1', 
+    'SELECT id, first_name, last_name, email, role, is_admin, is_super_admin, is_active FROM users WHERE id = $1', 
     [id]
   );
   return rows[0];
 };
-
-// --- NEW OTP UPDATE METHODS ---
 
 exports.savePendingUpdate = async (userId, updateData, otp, expiry) => {
   const query = `
@@ -180,7 +233,6 @@ exports.clearPendingUpdate = async (userId) => {
 };
 
 exports.applyUserUpdate = async (userId, data) => {
-  // Map JSON keys to SQL columns
   const fields = [];
   const values = [];
   let index = 1;
@@ -202,7 +254,7 @@ exports.applyUserUpdate = async (userId, data) => {
     values.push(data.password_hash);
   }
 
-  if (fields.length === 0) return; // Nothing to update
+  if (fields.length === 0) return;
 
   values.push(userId);
   const query = `UPDATE users SET ${fields.join(', ')} WHERE id = $${index}`;

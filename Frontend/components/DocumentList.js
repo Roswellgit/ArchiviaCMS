@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import PreviewModal from './PreviewModal';
 import { getCitation } from '../services/apiService';
 
-const getSafeList = (data) => {
+export const getSafeList = (data) => {
     if (!data) return [];
     if (Array.isArray(data)) return data;
     if (typeof data === 'string') {
@@ -237,7 +237,10 @@ export default function DocumentList({
                                             )}
                                         </div>
                                     );
-                                } catch (err) { return null; }
+                                } catch (err) { 
+                                    console.error("Error rendering document:", doc, err);
+                                    return null; 
+                                }
                             })}
                         </div>
 
