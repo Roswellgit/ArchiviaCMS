@@ -501,3 +501,38 @@ exports.removeBrandIcon = async (req, res) => {
     res.status(500).json({ message: 'Failed to remove brand icon.' });
   }
 };
+
+exports.getPendingDocuments = async (req, res) => {
+  try {
+    const docs = await documentModel.findPending();
+    res.json(docs);
+  } catch (err) {
+    console.error("Error fetching pending docs:", err.message);
+    res.status(500).send('Server error');
+  }
+};
+
+exports.approveDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = await documentModel.updateStatus(id, 'approved');
+    if (!updated) return res.status(404).json({ message: "Document not found" });
+    res.json({ message: "Document approved successfully." });
+  } catch (err) {
+    console.error("Error approving document:", err.message);
+    res.status(500).send('Server error');
+  }
+};
+
+exports.rejectDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // You can delete it or set status to 'rejected'
+    const updated = await documentModel.updateStatus(id, 'rejected'); 
+    if (!updated) return res.status(404).json({ message: "Document not found" });
+    res.json({ message: "Document rejected." });
+  } catch (err) {
+    console.error("Error rejecting document:", err.message);
+    res.status(500).send('Server error');
+  }
+};

@@ -331,3 +331,18 @@ exports.generateCitation = async (req, res) => {
     res.status(500).json({ message: "Server error generating citation" });
   }
 };
+
+exports.approveDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updatedDoc = await documentModel.updateStatus(id, 'approved');
+
+    if (!updatedDoc) {
+      return res.status(404).json({ message: "Document not found." });
+    }
+    res.json({ message: "Document approved successfully.", document: updatedDoc });
+  } catch (err) {
+    console.error("Error approving document:", err.message);
+    res.status(500).send('Server error');
+  }
+};

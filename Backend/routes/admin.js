@@ -1,19 +1,17 @@
 const express = require('express');
+const router = express.Router();
 const adminController = require('../controllers/adminController');
 const adminMiddleware = require('../middleware/adminMiddleware');
-const authMiddleware = require('../middleware/authMiddleware'); // Import this
-const router = express.Router();
+const authMiddleware = require('../middleware/authMiddleware');
 
 // --- ACCOUNT & GROUP CREATION (RBAC) ---
-// We use authMiddleware here so Advisers (who might not be "Admins") can access these.
-// The Controller handles the strict permission logic (Super Admin > Admin > Adviser).
 router.post('/create-account', authMiddleware, adminController.createAccount);
 router.post('/create-group', authMiddleware, adminController.createGroup);
 
 // ------------------------------------------
-// PROTECT ALL ROUTES BELOW THIS LINE WITH ADMIN MIDDLEWARE
+// PROTECT ALL ROUTES BELOW THIS LINE
 // ------------------------------------------
-router.use(adminMiddleware);
+router.use(authMiddleware, adminMiddleware);
 
 // --- Analytics ---
 router.get('/analytics', adminController.getDashboardStats);
@@ -30,12 +28,14 @@ router.put('/user-archive-requests/:id/reject', adminController.rejectUserArchiv
 
 // --- Document Management ---
 
-// NEW: Approval Queue Routes
+// 1. Get Pending Queue (Must come BEFORE generic /:id routes)
 router.get('/documents/pending', adminController.getPendingDocuments);
+
+// 2. Approve/Reject
 router.put('/documents/:id/approve', adminController.approveDocument);
 router.put('/documents/:id/reject', adminController.rejectDocument);
 
-// Existing Document Routes
+// 3. General Admin Updates
 router.put('/documents/:id', adminController.adminUpdateDocument);
 router.delete('/documents/:id', adminController.adminDeleteDocument);
 router.post('/documents/:id/archive', adminController.adminRequestArchive);

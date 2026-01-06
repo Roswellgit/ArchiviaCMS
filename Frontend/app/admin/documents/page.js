@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import EditDocumentModal from '../../../components/EditDocumentModal'; 
-import { searchDocuments, adminDeleteDocument, adminArchiveDocument, adminUpdateDocument, adminRestoreDocument } from '../../../services/apiService'; 
+// UPDATED IMPORTS: Added fetchPendingDocs, approveDocument, rejectDocument
+import { 
+  searchDocuments, 
+  fetchPendingDocs, 
+  approveDocument, 
+  rejectDocument,
+  adminDeleteDocument, 
+  adminArchiveDocument, 
+  adminUpdateDocument, 
+  adminRestoreDocument 
+} from '../../../services/apiService'; 
 import { useAuth } from '../../../context/AuthContext'; 
 import { toast } from 'react-hot-toast';
 
@@ -40,18 +50,14 @@ export default function AdminDocumentManagement() {
     }
   };
 
-  // Fetch Pending Queue specifically
+  // --- UPDATED: Fetch Pending Queue ---
+  // Uses apiService to avoid URL errors
   const fetchPendingQueue = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/documents/pending`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setPendingDocs(await res.json());
-      }
+      const data = await fetchPendingDocs();
+      setPendingDocs(data);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load pending queue", err);
     }
   };
 
@@ -62,22 +68,16 @@ export default function AdminDocumentManagement() {
 
   // --- ACTIONS ---
 
+  // --- UPDATED: Handle Approve ---
   const handleApprove = async (docId) => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/documents/${docId}/approve`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await approveDocument(docId); // Uses apiService
       
-      if (res.ok) {
-        toast.success("Document Approved & Published!", { duration: 5000 });
-        fetchPendingQueue(); // Refresh pending
-        handleSearch(searchTerm); // Refresh active list
-      } else {
-        throw new Error('Failed');
-      }
+      toast.success("Document Approved & Published!", { duration: 5000 });
+      fetchPendingQueue(); // Refresh pending list
+      handleSearch(searchTerm); // Refresh active list
     } catch (err) {
+      console.error(err);
       toast.error("Approval failed.", { duration: 5000 });
     }
   };
@@ -98,19 +98,15 @@ export default function AdminDocumentManagement() {
     ), { duration: 6000, position: 'top-center', icon: '🚫' });
   };
 
+  // --- UPDATED: Execute Reject ---
   const executeReject = async (docId) => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/documents/${docId}/reject`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await rejectDocument(docId); // Uses apiService
       
-      if (res.ok) {
-        toast.success("Document Rejected.", { duration: 5000 });
-        fetchPendingQueue();
-      }
+      toast.success("Document Rejected.", { duration: 5000 });
+      fetchPendingQueue();
     } catch (err) {
+      console.error(err);
       toast.error("Rejection failed.", { duration: 5000 });
     }
   };
@@ -141,7 +137,7 @@ export default function AdminDocumentManagement() {
           </div>
         </form>
       </div>
-    ), { duration: 6000, position: 'top-center', icon: '📂' }); // Increased duration
+    ), { duration: 6000, position: 'top-center', icon: '📂' }); 
   };
 
   const executeArchive = async (docId, reason) => {
@@ -339,7 +335,7 @@ export default function AdminDocumentManagement() {
                                   <>
                                       <div className="h-4 w-px bg-slate-200"></div>
                                       <button onClick={() => handlePermanentDelete(doc.id)} className="text-sm font-semibold text-red-600 hover:text-red-800">
-                                          Delete
+                                        Delete
                                       </button>
                                   </>
                               )}

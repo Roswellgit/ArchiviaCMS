@@ -166,4 +166,20 @@ export const adminRemoveBgImage = removeBgImage;
 export const removeBrandIcon = () => api.post('/admin/remove-brand-icon');
 export const adminRemoveBrandIcon = removeBrandIcon;
 
+export const fetchPendingDocs = async () => {
+  // Uses the configured axios instance 'api'
+  const response = await api.get('/admin/documents/pending');
+  return response.data;
+};
+
+export const approveDocument = async (id) => {
+  const response = await api.put(`/admin/documents/${id}/approve`);
+  return response.data;
+};
+
+export const rejectDocument = async (id) => {
+  const response = await api.put(`/admin/documents/${id}/reject`);
+  return response.data;
+};
+
 export default api;
