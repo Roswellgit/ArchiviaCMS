@@ -28,8 +28,7 @@ export default function UploadForm({ onUploadSuccess }) {
     formData.append('file', file);
 
     toast.promise(uploadDocument(formData, (progressEvent) => {
-      const total = progressEvent.total || progressEvent.loaded;
-      const percentCompleted = total > 0 ? Math.round((progressEvent.loaded * 100) / total) : 0;
+      const percentCompleted = progressEvent.total ? Math.round((progressEvent.loaded * 100) / progressEvent.total) : 0;
       setUploadProgress(percentCompleted);
     }), {
         loading: 'Uploading and analyzing document...',
