@@ -51,6 +51,13 @@ export default function UploadForm({ onUploadSuccess }) {
           return `Successfully uploaded: ${response.data.title}`;
         },
         error: (error) => error.response?.data?.message || 'Upload failed.'
+    }, {
+        success: {
+            duration: 5000, 
+        },
+        error: {
+            duration: 5000,
+        }
     }).finally(() => { setLoading(false); });
   };
 
