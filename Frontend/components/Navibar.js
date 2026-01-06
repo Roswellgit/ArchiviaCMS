@@ -133,9 +133,9 @@ export default function Navbar() {
                             <div className="my-1 border-t border-slate-50"></div>
                             <p className="px-4 py-1 text-[10px] text-gray-400 uppercase tracking-wider font-bold">Requests</p>
                             
-                            <Link href="/admin/requests" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-orange-600">Deletion Requests</Link>
-                            <Link href="/admin/archive-requests" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-orange-600">Doc Archiving</Link>
-                            <Link href="/admin/user-archive-requests" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-red-600">User Archiving</Link>
+                            <Link href="/admin/requests?filter=deletion" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-orange-600">Deletion Requests</Link>
+                            <Link href="/admin/requests?filter=archiving" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-orange-600">Document Archiving</Link>
+                            <Link href="/admin/archive-requests" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-red-600">User Archiving</Link>
                             
                             {isSuperAdmin && (
                                 <>
@@ -192,9 +192,9 @@ export default function Navbar() {
                         <Link href="/admin/users" className="block py-2 text-slate-600">Manage Users</Link>
                         {isAdmin && (
                             <>
-                                <Link href="/admin/requests" className="block py-2 text-slate-600">Deletion Requests</Link>
-                                <Link href="/admin/archive-requests" className="block py-2 text-slate-600">Doc Archiving</Link>
-                                <Link href="/admin/user-archive-requests" className="block py-2 text-slate-600">User Archiving</Link>
+                                <Link href="/admin/requests?filter=deletion" className="block py-2 text-slate-600">Deletion Requests</Link>
+                                <Link href="/admin/requests?filter=archiving" className="block py-2 text-slate-600">Document Archiving</Link>
+                                <Link href="/admin/archive-requests" className="block py-2 text-slate-600">User Archiving</Link>
                             </>
                         )}
                       </div>

@@ -204,7 +204,7 @@ export default function AdminDashboardPage() {
 
                   {/* 2. DOCUMENT ARCHIVE REQUESTS */}
                   <RequestTable 
-                      title="Doc Archive Requests" 
+                      title="Document Archive Requests" 
                       items={docArchives} 
                       type="docArchive" 
                       onAction={handleAction} 

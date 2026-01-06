@@ -9,7 +9,6 @@ const api = axios.create({
 });
 
 
-
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
@@ -34,10 +33,6 @@ export const setAuthToken = (token) => {
     }
 };
 
-
-
-
-
 export const searchDocuments = (term) => {
     if (!term) return api.get('/documents');
     return api.get(`/documents/search?term=${term}`);
@@ -50,10 +45,6 @@ export const getPopularSearches = (limit) => {
     return api.get('/documents/popular');
 };
 export const getSettings = () => api.get('/settings');
-
-
-
-
 
 export const login = (email, password) => {
     if (typeof email === 'object') return api.post('/auth/login', email);
@@ -84,10 +75,6 @@ export const changePassword = (data) => api.put('/auth/change-password', data);
 export const changeUserPassword = (currentPassword, newPassword) => 
     api.put('/auth/change-password', { currentPassword, newPassword });
 
-
-
-
-
 export const uploadDocument = (formData, onUploadProgress) => api.post('/documents/upload', formData, {
     onUploadProgress
 });
@@ -97,10 +84,6 @@ export const deleteDocument = (id) => api.delete(`/documents/${id}`);
 export const getCitation = (document, style) => api.post('/documents/citation', { document, style });
 export const requestDelete = (id, reason) => api.post(`/documents/${id}/request-delete`, { reason });
 export const requestDeletion = requestDelete;
-
-
-
-
 
 export const adminDeleteUserPermanently = (id) => api.delete(`/admin/users/${id}?permanent=true`);
 export const getAdminAnalytics = () => api.get('/admin/analytics');
@@ -168,8 +151,7 @@ export const adminRemoveBrandIcon = removeBrandIcon;
 
 export const adminCreateUser = async (userData) => {
   const token = localStorage.getItem('token');
-  // Adjust the endpoint path if your backend route is different (e.g., /auth/register or /admin/create-account)
-  // Based on your adminController, it seems to be an admin specific route.
+  
   const response = await axios.post(`${API_URL}/admin/create-account`, userData, {
     headers: { Authorization: `Bearer ${token}` }
   });
@@ -177,7 +159,7 @@ export const adminCreateUser = async (userData) => {
 };
 
 export const fetchPendingDocs = async () => {
-  // Uses the configured axios instance 'api'
+    
   const response = await api.get('/admin/documents/pending');
   return response.data;
 };
