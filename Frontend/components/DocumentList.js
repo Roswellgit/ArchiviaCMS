@@ -119,7 +119,7 @@ export default function DocumentList({
                 </form>
                 
                 {safePopularSearches.length > 0 && (
-                    <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Quick Tags:</span>
                         {safePopularSearches.map((item, idx) => (
                             <button 
