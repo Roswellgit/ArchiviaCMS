@@ -41,7 +41,7 @@ export default function LoginForm() {
       toast.success(`Success! Welcome, ${userData.firstName}.`, { id: toastId });
       setTimeout(() => {
         handleRedirect(userData);
-      }, 1000);
+      }, 5000);
     } catch (error) {
       const errorMessage = error.response?.status === 401
         ? 'Login failed: Invalid password.'
@@ -66,7 +66,7 @@ export default function LoginForm() {
         toast.success(`Welcome, ${userData.firstName}!`, { id: toastId });
         setTimeout(() => {
             handleRedirect(userData);
-        }, 1000);
+        }, 5000);
     } catch (error) {
         console.error('Google Registration error:', error);
         let msg = 'Google registration failed.';
@@ -116,7 +116,7 @@ export default function LoginForm() {
           toast.success(`Welcome back, ${userData.firstName}!`, { id: toastId });
           setTimeout(() => {
               handleRedirect(userData);
-          }, 1000);
+          }, 5000);
 
       } catch (loginError) {
          

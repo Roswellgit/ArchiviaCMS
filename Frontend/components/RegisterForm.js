@@ -105,7 +105,7 @@ const handlePasswordChange = (e) => {
         
         login(res.data.user, res.data.token);
         toast.success(`Account created! Welcome, ${res.data.user.firstName}.`);
-        setTimeout(() => { router.push('/'); }, 1000);
+        setTimeout(() => { router.push('/'); }, 5000);
       } catch (error) {
         console.error('Google Signup Error:', error);
         const msg = error.response?.data?.message || 'Google registration failed.';
@@ -120,7 +120,7 @@ const handlePasswordChange = (e) => {
       toast.promise(registerPromise, {
           loading: 'Registering...',
           success: (response) => {
-            setTimeout(() => { router.push(`/verify?email=${encodeURIComponent(email)}`); }, 1500); 
+            setTimeout(() => { router.push(`/verify?email=${encodeURIComponent(email)}`); }, 5000); 
             return `Success! OTP sent to ${email}`; 
           },
           error: (error) => {

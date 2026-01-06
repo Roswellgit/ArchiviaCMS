@@ -15,18 +15,20 @@ export default function FilterSidebar({ filters, selectedFilters, onFilterChange
   };
 
   const handleCheckboxChange = (category, value) => {
-    const current = selectedFilters[category] || [];
-    const isSelected = current.includes(value);
-    let updated;
+    const current = selectedFilters[category];
 
-    if (category === 'year' || category === 'dateRange') {
-        updated = isSelected ? null : value;
+    if (category === 'dateRange') {
+        const isSelected = current === value;
+        const updated = isSelected ? null : value;
+        onFilterChange(category, updated);
     } else {
-        updated = isSelected
-        ? current.filter(item => item !== value)
-        : [...current, value];
+        const currentArr = Array.isArray(current) ? current : [];
+        const isSelected = currentArr.includes(value);
+        const updated = isSelected
+        ? currentArr.filter(item => item !== value)
+        : [...currentArr, value];
+        onFilterChange(category, updated);
     }
-    onFilterChange(category, updated);
   };
 
   const renderSection = (title, category, items, isSingleSelect = false) => (
@@ -52,8 +54,12 @@ export default function FilterSidebar({ filters, selectedFilters, onFilterChange
 
                return (
                 <label key={value} className={`flex items-center text-sm p-1.5 rounded-md cursor-pointer transition-all ${isChecked ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>
-                  <div className={`w-4 h-4 rounded border flex items-center justify-center mr-2.5 transition-colors ${isChecked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
-                    {isChecked && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>}
+                  <div className={`w-4 h-4 border flex items-center justify-center mr-2.5 transition-colors ${isSingleSelect ? 'rounded-full' : 'rounded'} ${isChecked ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
+                    {isChecked && (
+                        isSingleSelect 
+                        ? <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                        : <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                    )}
                   </div>
                   {/* Hidden native input for accessibility */}
                   <input

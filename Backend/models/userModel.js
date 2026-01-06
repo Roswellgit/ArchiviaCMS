@@ -76,7 +76,6 @@ exports.deactivate = async (userId) => {
   return rows[0];
 };
 
-
 exports.deletePermanently = async (userId) => {
   const { rowCount } = await db.query('DELETE FROM users WHERE id = $1', [userId]);
   return rowCount;
@@ -152,4 +151,61 @@ exports.findById = async (id) => {
     [id]
   );
   return rows[0];
+};
+
+// --- NEW OTP UPDATE METHODS ---
+
+exports.savePendingUpdate = async (userId, updateData, otp, expiry) => {
+  const query = `
+    UPDATE users 
+    SET update_otp = $1, update_otp_expires = $2, pending_update_data = $3 
+    WHERE id = $4
+  `;
+  await db.query(query, [otp, expiry, JSON.stringify(updateData), userId]);
+};
+
+exports.getPendingUpdate = async (userId) => {
+  const query = 'SELECT update_otp, update_otp_expires, pending_update_data FROM users WHERE id = $1';
+  const { rows } = await db.query(query, [userId]);
+  return rows[0];
+};
+
+exports.clearPendingUpdate = async (userId) => {
+  const query = `
+    UPDATE users 
+    SET update_otp = NULL, update_otp_expires = NULL, pending_update_data = NULL 
+    WHERE id = $1
+  `;
+  await db.query(query, [userId]);
+};
+
+exports.applyUserUpdate = async (userId, data) => {
+  // Map JSON keys to SQL columns
+  const fields = [];
+  const values = [];
+  let index = 1;
+
+  if (data.firstName) {
+    fields.push(`first_name = $${index++}`);
+    values.push(data.firstName);
+  }
+  if (data.lastName) {
+    fields.push(`last_name = $${index++}`);
+    values.push(data.lastName);
+  }
+  if (data.email) {
+    fields.push(`email = $${index++}`);
+    values.push(data.email);
+  }
+  if (data.password_hash) {
+    fields.push(`password_hash = $${index++}`);
+    values.push(data.password_hash);
+  }
+
+  if (fields.length === 0) return; // Nothing to update
+
+  values.push(userId);
+  const query = `UPDATE users SET ${fields.join(', ')} WHERE id = $${index}`;
+  
+  await db.query(query, values);
 };

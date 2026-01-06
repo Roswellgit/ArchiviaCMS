@@ -23,7 +23,7 @@ function VerifyContent() {
         try {
             await verifyEmail(email, otp);
             toast.success("Verified!");
-            setTimeout(() => router.push('/login'), 1500);
+            setTimeout(() => router.push('/login'), 5000);
         } catch (error) { toast.error("Verification failed."); } 
         finally { setLoading(false); }
     };

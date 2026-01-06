@@ -3,7 +3,8 @@ const analyticsModel = require('../models/analyticsModel');
 const aiService = require('../services/aiService');
 const fileUploadService = require('../services/fileUploadService');
 const s3Service = require('../services/s3Service');
-const previewService = require('../services/previewService'); 
+const previewService = require('../services/previewService');
+const watermarkService = require('../services/watermarkService'); // <--- 1. Import this
 const path = require('path');
 
 const upload = fileUploadService.upload;
@@ -38,10 +39,7 @@ const sanitizeDocuments = async (req, documents) => {
 
 exports.getAllDocuments = async (req, res) => {
   try {
-    
     const isAdmin = req.user && (req.user.is_admin || req.user.is_super_admin);
-    
-    
     const rows = await documentModel.findAll(isAdmin);
     const data = await sanitizeDocuments(req, rows);
     res.json(data);
@@ -158,42 +156,55 @@ exports.uploadDocument = (req, res) => {
     if (err) return res.status(500).json({ message: 'File upload error.' });
     if (!req.file) return res.status(400).send('A file is required.');
 
-    
     if (req.file.size === 0) {
         return res.status(400).json({ message: 'The uploaded file is empty.' });
     }
+
+    // --- 2. START WATERMARK LOGIC ---
+    // Apply watermark ONLY if it is a PDF
+    if (req.file.mimetype === 'application/pdf') {
+        try {
+            const watermarkedBuffer = await watermarkService.addWatermark(
+                req.file.buffer, 
+                'Archivia - Intellectual Property' // You can customize this text
+            );
+            
+            // Replace the original buffer with the new watermarked one
+            // This ensures AI Analysis, Preview Generation, and S3 Upload 
+            // all use the protected version.
+            req.file.buffer = watermarkedBuffer;
+            req.file.size = watermarkedBuffer.length; 
+            
+        } catch (wmErr) {
+            console.error("Watermarking failed, proceeding with original file:", wmErr);
+            // Optional: return res.status(500).send("Watermarking failed") if strict
+        }
+    }
+    // --- END WATERMARK LOGIC ---
 
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const filename = `doc-${uniqueSuffix}${path.extname(req.file.originalname)}`;
     const userId = req.user.userId;
 
     try {
-        
-        
-        
         const analysisPromise = aiService.analyzeDocument(req.file.buffer);
 
-        
         const previewPromise = previewService.generatePreviews(req.file.buffer, filename)
             .catch(err => {
                 console.error("Preview generation failed silently:", err.message);
                 return [];
             });
 
-        
         const s3Promise = s3Service.uploadToS3(req.file, `documents/${filename}`);
 
-     
         const [metadata, previewUrls, fileKey] = await Promise.all([
             analysisPromise,
             previewPromise,
             s3Promise
         ]);
 
-
         if (metadata.is_safe === false) {
             console.warn(`[Content Moderation] Upload rejected: ${metadata.safety_reason}`);
-            
             
             if (s3Service.deleteFromS3) {
                 await s3Service.deleteFromS3(fileKey);
@@ -204,11 +215,9 @@ exports.uploadDocument = (req, res) => {
             });
         }
 
-
         if (metadata.title) {
             const existingDoc = await documentModel.findByExactTitle(metadata.title);
             if (existingDoc) {
-         
                 if (s3Service.deleteFromS3) {
                     await s3Service.deleteFromS3(fileKey);
                 }
@@ -217,7 +226,6 @@ exports.uploadDocument = (req, res) => {
                 });
             }
         }
-
 
         const documentData = {
           title: metadata.title,

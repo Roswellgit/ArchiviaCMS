@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { uploadDocument } from '../services/apiService';
 import { toast } from 'react-hot-toast'; 
 
@@ -8,6 +8,16 @@ export default function UploadForm({ onUploadSuccess }) {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false); 
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  useEffect(() => {
+    let interval;
+    if (loading && uploadProgress >= 90 && uploadProgress < 99) {
+      interval = setInterval(() => {
+        setUploadProgress((prev) => Math.min(prev + 1, 99));
+      }, 800);
+    }
+    return () => clearInterval(interval);
+  }, [loading, uploadProgress]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -28,11 +38,13 @@ export default function UploadForm({ onUploadSuccess }) {
     formData.append('file', file);
 
     toast.promise(uploadDocument(formData, (progressEvent) => {
-      const percentCompleted = progressEvent.total ? Math.round((progressEvent.loaded * 100) / progressEvent.total) : 0;
+      let percentCompleted = progressEvent.total ? Math.round((progressEvent.loaded * 100) / progressEvent.total) : 0;
+      if (percentCompleted > 90) percentCompleted = 90;
       setUploadProgress(percentCompleted);
     }), {
         loading: 'Uploading and analyzing document...',
         success: (response) => {
+          setUploadProgress(100);
           setFile(null);
           event.target.reset(); 
           if (onUploadSuccess) onUploadSuccess();
@@ -80,7 +92,7 @@ export default function UploadForm({ onUploadSuccess }) {
         {loading && (
           <div className="w-full">
             <div className="flex justify-between text-xs text-slate-500 mb-1">
-              <span>Uploading...</span>
+              <span>{uploadProgress < 90 ? 'Uploading...' : 'Analyzing...'}</span>
               <span>{uploadProgress}%</span>
             </div>
             <div className="w-full bg-slate-200 rounded-full h-2.5">

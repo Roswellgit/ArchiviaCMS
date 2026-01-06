@@ -70,7 +70,7 @@ export default function DocumentList({
             setTimeout(() => {
                 setCopyFeedback(null);
                 setActiveCiteMenu(null);
-            }, 2000);
+            }, 5000);
         } catch (err) {
             setCopyFeedback({ id: doc.id, text: 'Error' });
         }
@@ -81,7 +81,7 @@ export default function DocumentList({
         setActiveCiteMenu(activeCiteMenu === docId ? null : docId);
     };
 
-    const safePopularSearches = Array.isArray(popularSearches) ? popularSearches : [];
+    const safePopularSearches = (Array.isArray(popularSearches) ? popularSearches : []).slice(0, 5);
     const safeDocuments = Array.isArray(documents) ? documents : [];
     const isDataError = documents && !Array.isArray(documents);
 

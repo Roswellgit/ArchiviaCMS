@@ -65,7 +65,7 @@ export default function AdminThemeManagement() {
           }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Reset</button>
         </div>
       </div>
-    ), { duration: 2000, position: 'top-center', icon: '⚠️' });
+    ), { duration: 5000, position: 'top-center', icon: '⚠️' });
   };
 
   const executeReset = async () => {

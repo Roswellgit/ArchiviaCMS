@@ -40,7 +40,7 @@ function ResetPasswordForm() {
     try {
       await resetPassword(token, password);
       toast.success('Password updated!');
-      setTimeout(() => router.push('/login'), 2000);
+      setTimeout(() => router.push('/login'), 5000);
     } catch (error) { toast.error('Reset failed.'); } 
     finally { setLoading(false); }
   };

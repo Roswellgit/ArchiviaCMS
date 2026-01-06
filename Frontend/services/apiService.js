@@ -45,7 +45,10 @@ export const searchDocuments = (term) => {
 
 export const getFilters = () => api.get('/documents/filters');
 export const filterDocuments = (filters) => api.post('/documents/filter', filters);
-export const getPopularSearches = () => api.get('/documents/popular');
+export const getPopularSearches = (limit) => {
+    if (limit) return api.get(`/documents/popular?limit=${limit}`);
+    return api.get('/documents/popular');
+};
 export const getSettings = () => api.get('/settings');
 
 

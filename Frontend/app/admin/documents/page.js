@@ -8,11 +8,11 @@ import { toast } from 'react-hot-toast';
 
 export default function AdminDocumentManagement() {
   const [documents, setDocuments] = useState([]);
+  const [pendingDocs, setPendingDocs] = useState([]); // Separate state for pending queue
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  
-  const [currentTab, setCurrentTab] = useState('active'); 
+  const [currentTab, setCurrentTab] = useState('active'); // active, archived, pending
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -21,8 +21,12 @@ export default function AdminDocumentManagement() {
   
   const { user } = useAuth(); 
 
-  useEffect(() => { handleSearch(''); }, []);
+  useEffect(() => { 
+    handleSearch('');
+    fetchPendingQueue(); 
+  }, []);
 
+  // Fetch Main Documents (Active/Archived)
   const handleSearch = async (term) => {
     try {
       setLoading(true);
@@ -30,9 +34,24 @@ export default function AdminDocumentManagement() {
       setDocuments(response.data);
       setCurrentPage(1); 
     } catch (err) {
-      toast.error('Failed to fetch documents.');
+      toast.error('Failed to fetch documents.', { duration: 5000 });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch Pending Queue specifically
+  const fetchPendingQueue = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/documents/pending`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setPendingDocs(await res.json());
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -41,7 +60,61 @@ export default function AdminDocumentManagement() {
     handleSearch(searchTerm);
   };
 
-  
+  // --- ACTIONS ---
+
+  const handleApprove = async (docId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/documents/${docId}/approve`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        toast.success("Document Approved & Published!", { duration: 5000 });
+        fetchPendingQueue(); // Refresh pending
+        handleSearch(searchTerm); // Refresh active list
+      } else {
+        throw new Error('Failed');
+      }
+    } catch (err) {
+      toast.error("Approval failed.", { duration: 5000 });
+    }
+  };
+
+  const handleReject = (docId) => {
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p className="font-bold text-slate-800 text-sm">Reject this document?</p>
+        <p className="text-xs text-slate-500">It will be hidden from the public.</p>
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
+          <button onClick={() => {
+             executeReject(docId);
+             toast.dismiss(t.id);
+          }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Confirm Reject</button>
+        </div>
+      </div>
+    ), { duration: 6000, position: 'top-center', icon: '🚫' });
+  };
+
+  const executeReject = async (docId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/documents/${docId}/reject`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        toast.success("Document Rejected.", { duration: 5000 });
+        fetchPendingQueue();
+      }
+    } catch (err) {
+      toast.error("Rejection failed.", { duration: 5000 });
+    }
+  };
+
   const handleArchive = (docId) => {
     toast((t) => (
       <div className="flex flex-col gap-3">
@@ -68,29 +141,27 @@ export default function AdminDocumentManagement() {
           </div>
         </form>
       </div>
-    ), { duration: 2000, position: 'top-center', icon: '📂' });
+    ), { duration: 6000, position: 'top-center', icon: '📂' }); // Increased duration
   };
 
   const executeArchive = async (docId, reason) => {
     try {
         await adminArchiveDocument(docId, reason);
-        toast.success("Document archived.");
+        toast.success("Document archived.", { duration: 5000 });
         handleSearch(searchTerm);
-    } catch (err) { toast.error("Failed to archive."); }
+    } catch (err) { toast.error("Failed to archive.", { duration: 5000 }); }
   };
 
-  
   const handleRestore = async (docId) => {
     try {
         await adminRestoreDocument(docId);
-        toast.success("Document restored.");
+        toast.success("Document restored.", { duration: 5000 });
         handleSearch(searchTerm);
     } catch (err) {
-        toast.error("Restore failed.");
+        toast.error("Restore failed.", { duration: 5000 });
     }
   };
 
-  
   const handlePermanentDelete = (docId) => {
     toast((t) => (
       <div className="flex flex-col gap-2">
@@ -99,8 +170,8 @@ export default function AdminDocumentManagement() {
         <div className="flex gap-2 justify-end pt-1">
           <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
           <button onClick={() => {
-              executeDelete(docId);
-              toast.dismiss(t.id);
+             executeDelete(docId);
+             toast.dismiss(t.id);
           }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Delete</button>
         </div>
       </div>
@@ -110,9 +181,10 @@ export default function AdminDocumentManagement() {
   const executeDelete = async (docId) => {
     try {
         await adminDeleteDocument(docId);
-        toast.success("Document deleted.");
+        toast.success("Document deleted.", { duration: 5000 });
         handleSearch(searchTerm);
-    } catch (err) { toast.error("Delete failed."); }
+        fetchPendingQueue();
+    } catch (err) { toast.error("Delete failed.", { duration: 5000 }); }
   };
 
   const handleEdit = (doc) => { setSelectedDocument(doc); setIsModalOpen(true); };
@@ -121,22 +193,35 @@ export default function AdminDocumentManagement() {
     try {
         await adminUpdateDocument(docId, updatedData);
         setIsModalOpen(false);
-        toast.success('Document updated.');
+        toast.success('Document updated.', { duration: 5000 });
         handleSearch(searchTerm); 
-    } catch (error) { toast.error("Save failed."); }
+    } catch (error) { toast.error("Save failed.", { duration: 5000 }); }
   };
 
+  // --- FILTERING ---
   
-  const filteredDocuments = documents.filter(doc => {
-      if (currentTab === 'active') return !doc.archive_requested;
-      if (currentTab === 'archived') return doc.archive_requested;
+  let listToRender = [];
+  if (currentTab === 'pending') {
+    listToRender = pendingDocs;
+  } else {
+    // Filter the main documents list
+    listToRender = documents.filter(doc => {
+      if (currentTab === 'active') {
+        // Show only Approved AND Not Archived
+        return !doc.archive_requested && doc.status === 'approved'; 
+      }
+      if (currentTab === 'archived') {
+        return doc.archive_requested;
+      }
       return true;
-  });
+    });
+  }
 
+  // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredDocuments.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredDocuments.length / itemsPerPage);
+  const currentItems = listToRender.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(listToRender.length / itemsPerPage);
 
   return (
     <div className="space-y-6">
@@ -149,13 +234,20 @@ export default function AdminDocumentManagement() {
           
           <div className="flex bg-slate-100 p-1 rounded-lg">
               <button 
-                onClick={() => setCurrentTab('active')}
+                onClick={() => { setCurrentTab('active'); setCurrentPage(1); }}
                 className={`px-4 py-1.5 text-sm font-bold rounded-md transition-all ${currentTab === 'active' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Library
               </button>
               <button 
-                onClick={() => setCurrentTab('archived')}
+                onClick={() => { setCurrentTab('pending'); setCurrentPage(1); }}
+                className={`px-4 py-1.5 text-sm font-bold rounded-md transition-all ${currentTab === 'pending' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Pending 
+                {pendingDocs.length > 0 && <span className="ml-2 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingDocs.length}</span>}
+              </button>
+              <button 
+                onClick={() => { setCurrentTab('archived'); setCurrentPage(1); }}
                 className={`px-4 py-1.5 text-sm font-bold rounded-md transition-all ${currentTab === 'archived' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Archive
@@ -163,24 +255,26 @@ export default function AdminDocumentManagement() {
           </div>
       </div>
       
-      {/* Search Bar */}
-      <form onSubmit={handleSearchSubmit} className="relative">
-          <input
-              type="text"
-              placeholder="Search documents..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-4 pr-32 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-          />
-          <button type="submit" className="absolute right-2 top-2 bottom-2 px-6 bg-slate-900 text-white font-bold rounded-lg hover:bg-indigo-600 transition-colors text-sm">
-              Search
-          </button>
-      </form>
+      {/* Search Bar (Hide for pending to focus on queue) */}
+      {currentTab !== 'pending' && (
+        <form onSubmit={handleSearchSubmit} className="relative">
+            <input
+                type="text"
+                placeholder="Search documents..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-4 pr-32 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+            />
+            <button type="submit" className="absolute right-2 top-2 bottom-2 px-6 bg-slate-900 text-white font-bold rounded-lg hover:bg-indigo-600 transition-colors text-sm">
+                Search
+            </button>
+        </form>
+      )}
 
       {/* List */}
       {loading ? (
           <div className="text-center p-10 text-slate-400">Loading library...</div>
-      ) : filteredDocuments.length === 0 ? (
+      ) : listToRender.length === 0 ? (
           <div className="text-center p-10 bg-white rounded-xl border border-dashed border-slate-200 text-slate-500">
               No {currentTab} documents found.
           </div>
@@ -188,47 +282,68 @@ export default function AdminDocumentManagement() {
         <>
             <div className="grid gap-4">
             {currentItems.map(doc => (
-                <div key={doc.id} className="p-5 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex justify-between items-center">
+                <div key={doc.id} className="p-5 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
                         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-3">
                             {doc.title || "Untitled"}
                             {doc.deletion_requested && <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase">Deletion Requested</span>}
+                            {currentTab === 'pending' && <span className="bg-yellow-100 text-yellow-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase">Pending</span>}
                         </h3>
+                        
                         {currentTab === 'archived' && doc.archive_reason && (
                             <p className="text-xs text-orange-600 font-medium mt-1">Reason: {doc.archive_reason}</p>
                         )}
+                        
                         <p className="text-sm text-slate-500 mt-1">
                             {doc.ai_authors?.length > 0 ? doc.ai_authors.join(', ') : 'Unknown Author'} • {doc.ai_date_created || 'No Date'}
                         </p>
+                        
+                        {/* File Link */}
+                        <a href={doc.downloadLink || doc.file_url || '#'} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline mt-2 inline-block">
+                           View PDF
+                        </a>
                     </div>
                     
                     <div className="flex gap-3 items-center">
-                        {currentTab === 'active' && (
-                            <button onClick={() => handleEdit(doc)} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">Edit</button>
-                        )}
-                        
-                        {(currentTab === 'active' && user?.is_super_admin) && <div className="h-4 w-px bg-slate-200"></div>}
-                        
-                        {/* Action Buttons */}
-                        {currentTab === 'active' ? (
-                             <button onClick={() => handleArchive(doc.id)} className="text-sm font-semibold text-slate-500 hover:text-orange-600">
-                                Archive
+                        {/* Actions for Pending Queue */}
+                        {currentTab === 'pending' ? (
+                           <>
+                             <button onClick={() => handleApprove(doc.id)} className="px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 shadow-sm transition">
+                               Approve
                              </button>
+                             <button onClick={() => handleReject(doc.id)} className="px-4 py-2 bg-white border border-red-200 text-red-600 text-sm font-bold rounded-lg hover:bg-red-50 shadow-sm transition">
+                               Reject
+                             </button>
+                           </>
                         ) : (
-                             
-                             <button onClick={() => handleRestore(doc.id)} className="text-sm font-semibold text-green-600 hover:text-green-800">
-                                Restore
-                             </button>
-                        )}
-                        
-                        {/* Super Admin Delete */}
-                        {user?.is_super_admin && (
-                            <>
-                                <div className="h-4 w-px bg-slate-200"></div>
-                                <button onClick={() => handlePermanentDelete(doc.id)} className="text-sm font-semibold text-red-600 hover:text-red-800">
-                                    Delete
-                                </button>
-                            </>
+                           // Standard Actions
+                           <>
+                              {currentTab === 'active' && (
+                                  <button onClick={() => handleEdit(doc)} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">Edit</button>
+                              )}
+                              
+                              {(currentTab === 'active' && user?.is_super_admin) && <div className="h-4 w-px bg-slate-200"></div>}
+                              
+                              {currentTab === 'active' ? (
+                                    <button onClick={() => handleArchive(doc.id)} className="text-sm font-semibold text-slate-500 hover:text-orange-600">
+                                      Archive
+                                    </button>
+                              ) : (
+                                    <button onClick={() => handleRestore(doc.id)} className="text-sm font-semibold text-green-600 hover:text-green-800">
+                                      Restore
+                                    </button>
+                              )}
+                              
+                              {/* Super Admin Delete */}
+                              {user?.is_super_admin && (
+                                  <>
+                                      <div className="h-4 w-px bg-slate-200"></div>
+                                      <button onClick={() => handlePermanentDelete(doc.id)} className="text-sm font-semibold text-red-600 hover:text-red-800">
+                                          Delete
+                                      </button>
+                                  </>
+                              )}
+                           </>
                         )}
                     </div>
                 </div>

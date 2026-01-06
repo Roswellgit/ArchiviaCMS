@@ -3,17 +3,17 @@
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { updateUserProfile, changeUserPassword } from '../services/apiService';
+import { changeUserPassword } from '../services/apiService';
+import EditUserModal from './EditUserModal'; // Ensure EditUserModal.js is in the same folder
 
 export default function UserProfile() {
-  const { user, isAuthenticated, authLoading, login } = useAuth();
+  const { user, isAuthenticated, authLoading } = useAuth();
   const router = useRouter();
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '' });
-  const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
-  const [isSaving, setIsSaving] = useState(false);
+  // 'isEditing' now controls the Modal visibility, not inline inputs
+  const [isEditing, setIsEditing] = useState(false); 
 
+  // Separate state for the "Change Password" modal (if you want to keep it separate)
   const [showPwModal, setShowPwModal] = useState(false);
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [pwMessage, setPwMessage] = useState({ type: '', text: '' });
@@ -23,31 +23,11 @@ export default function UserProfile() {
     if (!authLoading && !isAuthenticated) {
       router.push('/login');
     }
-    if (user) {
-      setEditForm({ firstName: user.firstName || '', lastName: user.lastName || '', email: user.email || '' });
-    }
-  }, [isAuthenticated, authLoading, router, user]);
+  }, [isAuthenticated, authLoading, router]);
 
-  const handleEditChange = (e) => {
-    setEditForm({ ...editForm, [e.target.name]: e.target.value });
-  };
-
-  const handleProfileUpdate = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setProfileMessage({ type: '', text: '' });
-    try {
-      const response = await updateUserProfile(editForm);
-      if (response.data.token && response.data.user) {
-        login(response.data.user, response.data.token);
-      }
-      setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
-      setIsEditing(false);
-    } catch (err) {
-      setProfileMessage({ type: 'error', text: err.response?.data?.message || 'Failed to update profile.' });
-    } finally {
-      setIsSaving(false);
-    }
+  // Refreshes the page/data after a successful update in the modal
+  const handleUpdateSuccess = () => {
+    window.location.reload(); 
   };
 
   const handlePwSubmit = async (e) => {
@@ -62,7 +42,7 @@ export default function UserProfile() {
       await changeUserPassword(pwForm.currentPassword, pwForm.newPassword);
       setPwMessage({ type: 'success', text: 'Password changed successfully!' });
       setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setTimeout(() => setShowPwModal(false), 1500);
+      setTimeout(() => setShowPwModal(false), 5000);
     } catch (err) {
       setPwMessage({ type: 'error', text: err.response?.data?.message || 'Failed to change password.' });
     } finally {
@@ -77,7 +57,7 @@ export default function UserProfile() {
       {/* Profile Header Card */}
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 flex flex-col md:flex-row items-center md:items-start gap-6">
         <div className="w-24 h-24 rounded-full bg-slate-900 text-white flex items-center justify-center text-3xl font-bold uppercase shadow-lg shadow-slate-200">
-            {user.firstName.charAt(0)}
+            {user.firstName ? user.firstName.charAt(0) : 'U'}
         </div>
         <div className="flex-grow text-center md:text-left">
             <h2 className="text-3xl font-extrabold text-slate-900">{user.firstName} {user.lastName}</h2>
@@ -88,63 +68,35 @@ export default function UserProfile() {
                 </span>
             </div>
         </div>
-        {!isEditing && (
-          <button onClick={() => setIsEditing(true)} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 hover:border-slate-300 transition shadow-sm">
-            Edit Details
-          </button>
-        )}
+        
+        {/* CLICKING THIS NOW OPENS THE MODAL */}
+        <button onClick={() => setIsEditing(true)} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 hover:border-slate-300 transition shadow-sm">
+          Edit Details
+        </button>
       </div>
-
-      {profileMessage.text && (
-        <div className={`p-4 rounded-xl font-medium border ${profileMessage.type === 'error' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
-          {profileMessage.text}
-        </div>
-      )}
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Left Column: Personal Info Form */}
+        {/* Left Column: Personal Info (Static View) */}
         <div className="md:col-span-2 bg-white p-8 rounded-2xl shadow-lg border border-slate-100">
             <h3 className="text-lg font-bold text-slate-800 mb-6 border-b border-slate-100 pb-2">Personal Details</h3>
-            <form onSubmit={handleProfileUpdate} className="space-y-5">
+            
+            <div className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">First Name</label>
-                        {isEditing ? (
-                            <input name="firstName" value={editForm.firstName} onChange={handleEditChange} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" required />
-                        ) : (
-                            <p className="text-slate-800 font-semibold text-lg">{user.firstName}</p>
-                        )}
+                        <p className="text-slate-800 font-semibold text-lg">{user.firstName}</p>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Last Name</label>
-                        {isEditing ? (
-                            <input name="lastName" value={editForm.lastName} onChange={handleEditChange} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" required />
-                        ) : (
-                            <p className="text-slate-800 font-semibold text-lg">{user.lastName}</p>
-                        )}
+                        <p className="text-slate-800 font-semibold text-lg">{user.lastName}</p>
                     </div>
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Email Address</label>
-                    {isEditing ? (
-                        <input name="email" type="email" value={editForm.email} onChange={handleEditChange} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" required />
-                    ) : (
-                        <p className="text-slate-800 font-semibold text-lg">{user.email}</p>
-                    )}
+                    <p className="text-slate-800 font-semibold text-lg">{user.email}</p>
                 </div>
-
-                {isEditing && (
-                    <div className="flex gap-3 pt-4">
-                        <button type="submit" disabled={isSaving} className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition disabled:bg-indigo-300">
-                            {isSaving ? 'Saving...' : 'Save Changes'}
-                        </button>
-                        <button type="button" onClick={() => { setIsEditing(false); setEditForm({ firstName: user.firstName, lastName: user.lastName, email: user.email }); }} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition">
-                            Cancel
-                        </button>
-                    </div>
-                )}
-            </form>
+            </div>
         </div>
 
         {/* Right Column: Security */}
@@ -157,7 +109,16 @@ export default function UserProfile() {
         </div>
       </div>
 
-      {/* Change Password Modal */}
+      {/* --- RENDER THE NEW OTP MODAL HERE --- */}
+      {isEditing && (
+        <EditUserModal 
+            user={user} 
+            onClose={() => setIsEditing(false)} 
+            onUpdateSuccess={handleUpdateSuccess} 
+        />
+      )}
+
+      {/* Keep your existing Change Password Modal */}
       {showPwModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
           <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md animate-fade-in">

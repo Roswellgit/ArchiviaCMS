@@ -9,15 +9,23 @@ const s3Service = require('../services/s3Service');
 exports.getDashboardStats = async (req, res) => {
   try {
     const users = await userModel.findAll();
-    const documents = await documentModel.findAll();
+    // Use true to fetch everything (including pending/archived) for stats
+    const documents = await documentModel.findAll(true); 
     const topSearches = await analyticsModel.getTopSearches(5); 
 
     const totalUsers = users.length;
     const activeUsers = users.filter(u => u.is_active).length;
     const totalDocuments = documents.length;
-    const documentRequests = documents.filter(d => d.deletion_requested || d.archive_requested).length;
+    
+    // Existing requests
+    const deletionRequests = documents.filter(d => d.deletion_requested).length;
+    const archiveRequests = documents.filter(d => d.archive_requested).length;
     const userRequests = users.filter(u => u.archive_requested).length;
-    const pendingRequests = documentRequests + userRequests;
+    
+    // NEW: Count pending documents
+    const pendingDocs = documents.filter(d => d.status === 'pending').length;
+
+    const pendingRequests = deletionRequests + archiveRequests + userRequests + pendingDocs;
 
     res.json({ totalUsers, activeUsers, totalDocuments, pendingRequests, topSearches });
   } catch (err) {
@@ -26,6 +34,45 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
+// --- NEW APPROVAL WORKFLOW METHODS ---
+
+exports.getPendingDocuments = async (req, res) => {
+  try {
+    const docs = await documentModel.findPending();
+    res.json(docs);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch pending documents' });
+  }
+};
+
+exports.approveDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = await documentModel.updateStatus(id, 'approved');
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+    res.json({ message: 'Document approved successfully', doc });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to approve document' });
+  }
+};
+
+exports.rejectDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // We update status to rejected. 
+    // Alternatively, you could use deleteById if you want it gone forever.
+    const doc = await documentModel.updateStatus(id, 'rejected');
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+    res.json({ message: 'Document rejected', doc });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to reject document' });
+  }
+};
+
+// -------------------------------------
 
 exports.getAllUsers = async (req, res) => {
   try {
@@ -58,7 +105,6 @@ exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
     
-    
     if (req.query.permanent === 'true') {
         if (!req.user.is_super_admin) {
             return res.status(403).json({ message: "Only Super Admins can permanently delete users." });
@@ -68,14 +114,12 @@ exports.deleteUser = async (req, res) => {
         return res.json({ message: 'User permanently deleted.' });
     }
     
-
     if (req.user.is_super_admin) {
         const deactivatedUser = await userModel.deactivate(id);
         if (!deactivatedUser) return res.status(404).json({ message: 'User not found.' });
         return res.json({ message: 'User deactivated successfully.' });
     }
 
-   
     const { reason } = req.body;
     if (!reason) return res.status(400).json({ message: "Reason required for archiving request." });
 

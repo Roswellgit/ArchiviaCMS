@@ -1,11 +1,14 @@
 const db = require('../db');
 
 exports.findAll = async (includeArchived = false) => {
-  let query = `SELECT id, title, filename, filepath, preview_urls, created_at, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, deletion_requested, archive_requested, archive_reason 
-     FROM documents`;
+  // If includeArchived is FALSE (Public User), we only show active AND approved docs
+  let query = `
+    SELECT id, title, filename, filepath, preview_urls, created_at, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, deletion_requested, archive_requested, archive_reason, status 
+    FROM documents
+  `;
   
   if (!includeArchived) {
-    query += ` WHERE archive_requested IS NOT TRUE`;
+    query += ` WHERE archive_requested IS NOT TRUE AND status = 'approved'`;
   }
   
   query += ` ORDER BY created_at DESC`;
@@ -13,7 +16,6 @@ exports.findAll = async (includeArchived = false) => {
   const { rows } = await db.query(query);
   return rows;
 };
-
 
 exports.findByExactTitle = async (title) => {
   const { rows } = await db.query(
@@ -26,12 +28,12 @@ exports.findByExactTitle = async (title) => {
 exports.findByTerm = async (term, includeArchived = false) => {
   const terms = term.trim().split(/\s+/).filter(t => t.length > 0);
   
-  const selectClause = `SELECT id, title, filename, filepath, preview_urls, created_at, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, deletion_requested, archive_requested, archive_reason FROM documents`;
+  const selectClause = `SELECT id, title, filename, filepath, preview_urls, created_at, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, deletion_requested, archive_requested, archive_reason, status FROM documents`;
 
   if (terms.length === 0) {
       let query = selectClause;
       if (!includeArchived) {
-          query += ` WHERE archive_requested IS NOT TRUE`;
+          query += ` WHERE archive_requested IS NOT TRUE AND status = 'approved'`;
       }
       query += ` ORDER BY created_at DESC`;
       const { rows } = await db.query(query);
@@ -52,9 +54,8 @@ exports.findByTerm = async (term, includeArchived = false) => {
 
   let whereSql = whereClauses.join(' AND ');
   
-  
   if (!includeArchived) {
-      whereSql = `(${whereSql}) AND (archive_requested IS NOT TRUE)`;
+      whereSql = `(${whereSql}) AND (archive_requested IS NOT TRUE AND status = 'approved')`;
   }
 
   const query = `
@@ -69,12 +70,13 @@ exports.findByTerm = async (term, includeArchived = false) => {
   return rows;
 };
 
+// MODIFIED: Explicitly sets status to 'pending' on creation
 exports.create = async ({ title, filename, filepath, preview_urls, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id }) => {
   const safePreviewUrls = preview_urls || [];
   const { rows } = await db.query(
       `INSERT INTO documents 
-        (title, filename, filepath, preview_urls, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+        (title, filename, filepath, preview_urls, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, status) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending') RETURNING *`,
       [title, filename, filepath, safePreviewUrls, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id]
   );
   return rows[0];
@@ -82,7 +84,7 @@ exports.create = async ({ title, filename, filepath, preview_urls, ai_keywords, 
 
 exports.getAllMetadata = async () => {
   const { rows } = await db.query(
-    `SELECT ai_authors, ai_keywords, ai_date_created, ai_journal FROM documents WHERE archive_requested IS NOT TRUE`
+    `SELECT ai_authors, ai_keywords, ai_date_created, ai_journal FROM documents WHERE archive_requested IS NOT TRUE AND status = 'approved'`
   );
   return rows;
 };
@@ -93,7 +95,7 @@ exports.filterByFacets = async ({ authors, keywords, year, journal, dateRange },
   let paramIndex = 1;
 
   if (!includeArchived) {
-      query += ` AND (archive_requested IS NOT TRUE)`;
+      query += ` AND (archive_requested IS NOT TRUE AND status = 'approved')`;
   }
 
   if (authors && authors.length > 0) {
@@ -121,6 +123,25 @@ exports.filterByFacets = async ({ authors, keywords, year, journal, dateRange },
   const { rows } = await db.query(query, params);
   return rows;
 };
+
+// --- NEW ADMIN METHODS ---
+
+exports.findPending = async () => {
+  const { rows } = await db.query(
+    `SELECT * FROM documents WHERE status = 'pending' ORDER BY created_at ASC`
+  );
+  return rows;
+};
+
+exports.updateStatus = async (id, status) => {
+  const { rows } = await db.query(
+    `UPDATE documents SET status = $1 WHERE id = $2 RETURNING *`,
+    [status, id]
+  );
+  return rows[0];
+};
+
+// --- EXISTING METHODS ---
 
 exports.findByUser = async (userId) => {
   const { rows } = await db.query('SELECT * FROM documents WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
@@ -163,7 +184,6 @@ exports.adminDeleteById = async (id) => {
     return rowCount;
 };
 
-
 exports.submitDeletionRequest = async (id, userId, reason) => {
   const { rows } = await db.query(
     `UPDATE documents 
@@ -175,7 +195,6 @@ exports.submitDeletionRequest = async (id, userId, reason) => {
   return rows[0];
 };
 
-
 exports.findAllDeletionRequests = async () => {
   const { rows } = await db.query(
     `SELECT id, title, filename, user_id, deletion_reason, created_at, ai_authors 
@@ -185,7 +204,6 @@ exports.findAllDeletionRequests = async () => {
   );
   return rows;
 };
-
 
 exports.revokeDeletionRequest = async (id) => {
   const { rows } = await db.query(
@@ -197,8 +215,6 @@ exports.revokeDeletionRequest = async (id) => {
   );
   return rows[0];
 };
-
-
 
 exports.submitArchiveRequest = async (id, reason) => {
   const { rows } = await db.query(
@@ -231,7 +247,6 @@ exports.revokeArchiveRequest = async (id) => {
   );
   return rows[0];
 };
-
 
 exports.autoArchiveOldDocuments = async () => {
   try {
