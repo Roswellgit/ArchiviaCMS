@@ -9,24 +9,38 @@ export default function AdminLayout({ children }) {
   const router = useRouter();
 
   useEffect(() => {
-    // Allow access if they are Admin OR Advisor
-    // We check if the role is 'Advisor' (or whatever your specific string is)
-    const isAuthorized = user?.is_admin || user?.role === 'Advisor';
+    if (authLoading) return;
 
-    if (!authLoading && (!isAuthenticated || !isAuthorized)) {
+    // 1. Not logged in? -> Login
+    if (!isAuthenticated) {
       router.push('/login'); 
+      return;
+    }
+
+    // 2. Define who is allowed in the Management Area
+    // STRICT: Only Super Admin, Admin, and Advisor
+    const allowedRoles = ['Super Admin', 'Admin', 'Advisor'];
+    const userRole = user?.role || 'User';
+
+    if (!allowedRoles.includes(userRole)) {
+      // If a student (or normal user) tries to access Admin, send them to Analytics
+      router.push('/analytics'); 
     }
   }, [isAuthenticated, user, authLoading, router]);
 
-  // Update loading check too
-  const isAuthorized = user?.is_admin || user?.role === 'Advisor';
-
-  if (authLoading || !isAuthenticated || !isAuthorized) {
+  
+  if (authLoading || !isAuthenticated) {
     return (
       <main className="container mx-auto p-20 text-center text-slate-400">
         <div className="animate-pulse">Loading admin resources...</div>
       </main>
     );
+  }
+
+  // Double check render block logic
+  const allowedRoles = ['Super Admin', 'Admin', 'Advisor'];
+  if (!allowedRoles.includes(user?.role)) {
+      return null; // Don't render content while redirecting
   }
 
   return (
