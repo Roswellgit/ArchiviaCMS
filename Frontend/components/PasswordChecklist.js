@@ -15,11 +15,11 @@ export default function PasswordChecklist({ validity }) {
     <div className="p-4 mt-3 bg-slate-50/50 border border-slate-100 rounded-xl">
       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Requirements</p>
       <ul className="space-y-2">
-        <ChecklistItem isMet={validity.hasLength} text="Min 8 chars" />
-        <ChecklistItem isMet={validity.hasUpper} text="Uppercase letter" />
-        <ChecklistItem isMet={validity.hasLower} text="Lowercase letter" />
-        <ChecklistItem isMet={validity.hasNumber} text="Number" />
-        <ChecklistItem isMet={validity.hasSpecial} text="Special char" />
+        <ChecklistItem isMet={validity.hasLength} text="At least 8 characters" />
+        <ChecklistItem isMet={validity.hasUpper} text="Use one uppercase letter" />
+        <ChecklistItem isMet={validity.hasLower} text="Use one lowercase letter" />
+        <ChecklistItem isMet={validity.hasNumber} text="Use one Number" />
+        <ChecklistItem isMet={validity.hasSpecial} text="Use one special character" />
       </ul>
     </div>
   );
