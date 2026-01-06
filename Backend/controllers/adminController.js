@@ -6,83 +6,113 @@ const analyticsModel = require('../models/analyticsModel');
 const settingsModel = require('../models/settingsModel');
 const fileUploadService = require('../services/fileUploadService');
 const s3Service = require('../services/s3Service');
+const optionModel = require('../models/optionModel');
+const emailService = require('../services/emailService');
+
+const pool = require('../db');
 
 // --- HIERARCHICAL CREATION ---
 
+// --- HIERARCHICAL CREATION (Fixed for Pre-Verification) ---
+
 exports.createAccount = async (req, res) => {
+  const client = await pool.connect(); // Use transaction for safety
   try {
-    const { firstName, lastName, email, password, role } = req.body;
+    const { firstName, lastName, email, password, role, studentProfile } = req.body;
     const requester = req.user; 
 
+    // 1. Basic Validation
     if (!firstName || !lastName || !email || !password || !role) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    // UPDATED: Added new roles here
-    const validRoles = [
-      'student', 
-      'adviser', 
-      'admin', 
-      'superadmin', 
-      'principal', 
-      'assistant_principal', 
-      'research_coordinator'
-    ];
-
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ message: 'Invalid role selected.' });
-    }
-
-    // --- PERMISSION LOGIC ---
-
-    // 1. Students cannot create accounts
+    // 2. Permission Logic (Preserved from your code)
+    // Students cannot create accounts
     if (!requester.is_admin && !requester.is_super_admin && !requester.is_adviser) {
         return res.status(403).json({ message: 'Permission denied.' });
     }
-
-    // 2. Advisers: Can ONLY create Students
+    // Advisers: Can ONLY create Students
     if (requester.is_adviser && !requester.is_admin && !requester.is_super_admin) {
-        if (role !== 'student') {
+        if (role !== 'Student') { // Note: Capitalized 'Student' to match your DB options
             return res.status(403).json({ message: 'Advisers can only create Student accounts.' });
         }
     }
-
-    // 3. Admins/Principals/etc: Can create Advisers and Students
-    // They CANNOT create other Admins, Principals, etc.
+    // Admins: Cannot create other Admins/Super Admins
     if (requester.is_admin && !requester.is_super_admin) {
-        // List of roles that are considered "Admin Level" and thus restricted
-        const restrictedRoles = ['admin', 'superadmin', 'principal', 'assistant_principal', 'research_coordinator'];
+        const restrictedRoles = ['Admin', 'Super Admin'];
         if (restrictedRoles.includes(role)) {
-            return res.status(403).json({ message: 'Admins/Principals cannot create other Admin-level accounts.' });
+            return res.status(403).json({ message: 'Admins cannot create other Admin-level accounts.' });
         }
     }
 
-    // 4. Super Admins: Can create ANY role.
+    await client.query('BEGIN'); // Start Transaction
 
-    // --- EXECUTION ---
-    const existingUser = await userModel.findByEmail(email);
-    if (existingUser) {
+    // 3. Check for Existing Email
+    const emailCheck = await client.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (emailCheck.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({ message: 'User already exists with this email.' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    // 4. Hash Password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await userModel.createAccount({
-      firstName,
-      lastName,
-      email,
-      passwordHash,
-      role
-    });
+    // 5. Determine Boolean Flags based on Role String
+    // This maintains backward compatibility with your is_admin/is_super_admin columns
+    const isSuperAdmin = role === 'Super Admin';
+    const isAdmin = role === 'Admin' || isSuperAdmin;
+    const isAdviser = role === 'Advisor' || role === 'Teacher'; // Adjust based on your preferences
+
+    // 6. Insert User (PRE-VERIFIED: is_active=true, is_verified=true)
+    const insertUserQuery = `
+      INSERT INTO users (
+        first_name, last_name, email, password_hash, 
+        role, is_admin, is_super_admin, is_adviser, 
+        is_active, is_verified
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, true) 
+      RETURNING id, email, role
+    `;
+    
+    const userResult = await client.query(insertUserQuery, [
+      firstName, 
+      lastName, 
+      email, 
+      hashedPassword, 
+      role, 
+      isAdmin, 
+      isSuperAdmin, 
+      isAdviser
+    ]);
+
+    const newUserId = userResult.rows[0].id;
+
+    // 7. Handle Student Profile (if applicable)
+    // Only insert if role is Student AND we have profile data
+    if (role === 'Student' && studentProfile) {
+      const { yearLevel, strand } = studentProfile;
+      // Ensure we treat 'undefined' strand as NULL or empty string
+      await client.query(
+        `INSERT INTO student_profiles (user_id, year_level, strand) VALUES ($1, $2, $3)`,
+        [newUserId, yearLevel, strand || '']
+      );
+    }
+
+    await client.query('COMMIT'); // Commit Transaction
+
+    emailService.sendWelcomeEmail(email, firstName, password);
 
     res.status(201).json({
-      message: `${role.replace('_', ' ')} created successfully.`,
-      user: { id: newUser.id, email: newUser.email, role }
+      message: `${role} created successfully.`,
+      user: userResult.rows[0]
     });
 
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error creating account:', error);
     res.status(500).json({ message: 'Internal Server Error' });
+  } finally {
+    client.release();
   }
 };
 
@@ -534,5 +564,48 @@ exports.rejectDocument = async (req, res) => {
   } catch (err) {
     console.error("Error rejecting document:", err.message);
     res.status(500).send('Server error');
+  }
+};
+
+exports.getFormOptions = async (req, res) => {
+  try {
+    const rows = await optionModel.getAll();
+    
+    // Transform flat DB rows into grouped object for frontend
+    const grouped = rows.reduce((acc, item) => {
+      // simple pluralization: role -> roles, strand -> strands
+      const key = item.type + 's'; 
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(item.value);
+      return acc;
+    }, { roles: [], strands: [], yearLevels: [] });
+
+    res.json(grouped);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error fetching options' });
+  }
+};
+
+exports.addFormOption = async (req, res) => {
+  try {
+    const { type, value } = req.body;
+    if (!type || !value) return res.status(400).json({ message: 'Type and Value required' });
+    
+    await optionModel.add(type, value);
+    res.status(201).json({ message: 'Option added' });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ message: 'Option already exists' });
+    res.status(500).json({ message: 'Error adding option' });
+  }
+};
+
+exports.deleteFormOption = async (req, res) => {
+  try {
+    const { type, value } = req.body;
+    await optionModel.remove(type, value);
+    res.json({ message: 'Option removed' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting option' });
   }
 };

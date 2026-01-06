@@ -166,6 +166,16 @@ export const adminRemoveBgImage = removeBgImage;
 export const removeBrandIcon = () => api.post('/admin/remove-brand-icon');
 export const adminRemoveBrandIcon = removeBrandIcon;
 
+export const adminCreateUser = async (userData) => {
+  const token = localStorage.getItem('token');
+  // Adjust the endpoint path if your backend route is different (e.g., /auth/register or /admin/create-account)
+  // Based on your adminController, it seems to be an admin specific route.
+  const response = await axios.post(`${API_URL}/admin/create-account`, userData, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return response.data;
+};
+
 export const fetchPendingDocs = async () => {
   // Uses the configured axios instance 'api'
   const response = await api.get('/admin/documents/pending');
@@ -181,5 +191,9 @@ export const rejectDocument = async (id) => {
   const response = await api.put(`/admin/documents/${id}/reject`);
   return response.data;
 };
+
+export const getFormOptions = () => api.get('/admin/options');
+export const addFormOption = (type, value) => api.post('/admin/options', { type, value });
+export const deleteFormOption = (type, value) => api.delete('/admin/options', { data: { type, value } });
 
 export default api;

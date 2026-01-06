@@ -18,6 +18,8 @@ export default function Navbar() {
   
   const isAdmin = user?.is_admin;
   const isSuperAdmin = user?.is_super_admin;
+  // Added: Helper to check for Advisor role
+  const isAdvisor = user?.role === 'Advisor'; 
 
   const toggleDropdown = () => setIsDropdownOpen(!isDropdownOpen);
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -115,13 +117,21 @@ export default function Navbar() {
                         <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">My Account</p>
                     </div>
                     
-                    {user?.is_admin && (
+                    {/* Show if Admin OR Advisor */}
+                    {(isAdmin || isAdvisor) && (
                       <div className="border-b border-gray-100 pb-1 mb-1">
+                        {/* Manage Users: Visible to Admin AND Advisor */}
                         <Link href="/admin/users" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Manage Users</Link>
-                        <Link href="/admin/documents" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Manage Documents</Link>
-                        {isSuperAdmin && <Link href="/admin/requests" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Deletion Requests</Link>}
-                        {isSuperAdmin && <Link href="/admin/archive-requests" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Archive Requests</Link>}
-                        <Link href="/admin/theme" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Manage Theme</Link>
+                        
+                        {/* Other links: Strictly for Admin */}
+                        {isAdmin && (
+                          <>
+                            <Link href="/admin/documents" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Manage Documents</Link>
+                            {isSuperAdmin && <Link href="/admin/requests" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Deletion Requests</Link>}
+                            {isSuperAdmin && <Link href="/admin/archive-requests" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Archive Requests</Link>}
+                            <Link href="/admin/theme" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Manage Theme</Link>
+                          </>
+                        )}
                       </div>
                     )}
                     
@@ -165,19 +175,24 @@ export default function Navbar() {
                       <span className="block text-xs text-gray-400 uppercase tracking-wider mb-2">My Account ({user?.firstName})</span>
                       <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-slate-700">Profile Settings</Link>
                       {!isAdmin && <Link href="/my-uploads" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-slate-700">My Submissions</Link>}
-                      {isAdmin && (
+                      
+                      {/* Show if Admin OR Advisor */}
+                      {(isAdmin || isAdvisor) && (
                         <>
                           <Link href="/admin/users" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-indigo-600">Manage Users</Link>
-                          <Link href="/admin/documents" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-indigo-600">Manage Documents</Link>
+                          {isAdmin && (
+                             <Link href="/admin/documents" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-indigo-600">Manage Documents</Link>
+                          )}
                         </>
                       )}
+                      
                       <button onClick={handleLogout} className="block w-full text-left py-2 text-red-600 mt-2">Sign Out</button>
                     </li>
                   </>
                 ) : (
                   <li className="pt-2 border-t border-gray-200 flex flex-col gap-3">
-                     {shouldShowLoginLink && <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="block text-slate-700">Sign In</Link>}
-                     {!isAuthPage && <Link href="/register" onClick={() => setIsMobileMenuOpen(false)} className="block text-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg">Get Started</Link>}
+                      {shouldShowLoginLink && <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="block text-slate-700">Sign In</Link>}
+                      {!isAuthPage && <Link href="/register" onClick={() => setIsMobileMenuOpen(false)} className="block text-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg">Get Started</Link>}
                   </li>
                 )}
              </ul>

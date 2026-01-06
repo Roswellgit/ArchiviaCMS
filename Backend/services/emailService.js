@@ -91,3 +91,40 @@ exports.sendUpdateOtp = async (email, otp) => {
     console.error("❌ Update OTP send failed:", error);
   }
 };
+
+// --- ADD THIS NEW FUNCTION ---
+exports.sendWelcomeEmail = async (to, firstName, password) => {
+  const loginUrl = process.env.FRONTEND_URL || 'http://localhost:3000/login';
+  
+  const mailOptions = {
+    from: '"ArchiviaCMS Admin" <no-reply@archiviacms.com>', // Update sender if needed
+    to: to,
+    subject: 'Welcome to ArchiviaCMS - Your Account Credentials',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #4F46E5; text-align: center;">Welcome to ArchiviaCMS!</h2>
+        <p>Hello <strong>${firstName}</strong>,</p>
+        <p>Your account has been successfully created. You can now access the system using the credentials below:</p>
+        
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #4F46E5;">
+          <p style="margin: 5px 0; color: #374151;"><strong>Email:</strong> ${to}</p>
+          <p style="margin: 5px 0; color: #374151;"><strong>Password:</strong> <span style="font-family: monospace; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #d1d5db;">${password}</span></p>
+        </div>
+
+        <p style="color: #dc2626; font-size: 14px;"><em>Important: For security reasons, please log in and change your password immediately.</em></p>
+
+        <div style="text-align: center; margin-top: 30px;">
+          <a href="${loginUrl}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Login to Dashboard</a>
+        </div>
+      </div>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email Service] Welcome email sent to ${to}`);
+  } catch (error) {
+    console.error('[Email Service] Error sending welcome email:', error);
+    // We log but don't throw, so the user creation doesn't fail just because email failed
+  }
+};

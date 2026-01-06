@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { getAllUsers, adminUpdateUser, adminDeleteUser } from '../../../services/apiService';
 import { useAuth } from '../../../context/AuthContext';
 import EditUserModal from '../../../components/EditUserModal';
+import CreateUserModal from '../../../components/CreateUserModal'; // <--- IMPORT THIS
 import { toast } from 'react-hot-toast';
 import Link from 'next/link'; 
 
@@ -12,8 +13,10 @@ export default function AdminUserManagement() {
   const [loading, setLoading] = useState(true);
   const { user: adminUser } = useAuth();
 
+  // Modal States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false); // <--- NEW STATE
 
   useEffect(() => { fetchUsers(); }, []);
 
@@ -21,7 +24,10 @@ export default function AdminUserManagement() {
     try {
       setLoading(true);
       const response = await getAllUsers();
-      setUsers(response.data.filter(u => u.is_active));
+      // Handle response.data or direct array
+      const userList = Array.isArray(response) ? response : (response.data || []);
+      // Filter for active users
+      setUsers(userList.filter(u => u.is_active || u.isActive));
     } catch (err) {
       toast.error('Failed to fetch users.');
     } finally {
@@ -103,18 +109,31 @@ export default function AdminUserManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center pb-4 border-b border-slate-200">
+      {/* Header with Create Button */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 pb-4 border-b border-slate-200">
         <div>
             <h2 className="text-3xl font-extrabold text-slate-900">User Management</h2>
             <p className="text-slate-500 text-sm mt-1">Manage accounts and permissions</p>
         </div>
-        <Link href="/admin/users/archive">
-          <button className="px-5 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 hover:text-indigo-600 transition shadow-sm">
-            View Archives
-          </button>
-        </Link>
+        
+        <div className="flex gap-3">
+            {/* CREATE BUTTON */}
+            <button 
+                onClick={() => setIsCreateModalOpen(true)}
+                className="px-5 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 flex items-center gap-2"
+            >
+                <span className="text-xl leading-none font-light">+</span> Create User
+            </button>
+
+            <Link href="/admin/users/archive">
+                <button className="px-5 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 hover:text-indigo-600 transition shadow-sm">
+                    View Archives
+                </button>
+            </Link>
+        </div>
       </div>
 
+      {/* Users Table */}
       <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
         <table className="min-w-full divide-y divide-slate-100">
           <thead className="bg-slate-50/50">
@@ -134,7 +153,7 @@ export default function AdminUserManagement() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                         <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg mr-4">
-                            {user.first_name.charAt(0)}
+                            {user.first_name ? user.first_name.charAt(0) : '?'}
                         </div>
                         <div>
                             <div className="text-sm font-bold text-slate-900">{user.first_name} {user.last_name}</div>
@@ -143,13 +162,15 @@ export default function AdminUserManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {user.is_admin ? (
-                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full ${user.is_super_admin ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                        {user.is_super_admin ? 'Super Admin' : 'Admin'}
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full bg-slate-100 text-slate-600">User</span>
-                    )}
+                    {/* Display 'role' string if available, else fallback to booleans */}
+                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full 
+                        ${user.role === 'Super Admin' ? 'bg-purple-100 text-purple-700' : 
+                          user.role === 'Admin' ? 'bg-indigo-100 text-indigo-700' :
+                          user.role === 'Advisor' ? 'bg-orange-100 text-orange-800' :
+                          user.role === 'Student' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-600'}`}>
+                        {user.role || (user.is_super_admin ? 'Super Admin' : user.is_admin ? 'Admin' : 'User')}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button onClick={() => handleEdit(user)} className="text-indigo-600 hover:text-indigo-900 font-semibold mr-4">Edit</button>
@@ -169,13 +190,22 @@ export default function AdminUserManagement() {
         {users.length === 0 && <div className="p-8 text-center text-slate-400">No active users found.</div>}
       </div>
 
+      {/* Edit Modal */}
       <EditUserModal 
         user={selectedUser} 
+        isOpen={isEditModalOpen} 
         onClose={() => {
           setIsEditModalOpen(false);
           setSelectedUser(null);
         }} 
         onSave={handleSave} 
+      />
+
+      {/* NEW: Create User Modal */}
+      <CreateUserModal 
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={fetchUsers} // Refresh list after create
       />
     </div>
   );

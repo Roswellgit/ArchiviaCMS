@@ -59,4 +59,9 @@ router.post('/upload-brand-icon', adminController.uploadBrandIcon);
 router.post('/remove-brand-icon', adminController.removeBrandIcon);
 router.post('/settings/reset', adminController.resetSettings);
 
+router.get('/options', adminController.getFormOptions);
+router.post('/options', adminController.addFormOption); 
+router.delete('/options', adminController.deleteFormOption);
+router.post('/create-account', adminController.createAccount);
+
 module.exports = router;
