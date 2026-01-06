@@ -1,28 +1,52 @@
 import React from 'react';
 
-const SimpleBarChart = ({ data, labelKey, valueKey, color }) => {
-  if (!data || data.length === 0) return <p className="text-gray-400 text-sm">No data available</p>;
+// --- SUB-COMPONENTS FOR CLEANER CODE ---
 
-  // Find max value to scale the bars
-  const maxVal = Math.max(...data.map(item => parseInt(item[valueKey] || 0)));
+const StatCard = ({ title, value, subtitle, icon, colorClass }) => (
+  <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-300 relative overflow-hidden group">
+    <div className="relative z-10">
+      <div className="flex justify-between items-start mb-4">
+        <div className={`p-3 rounded-xl ${colorClass} bg-opacity-10 text-xl`}>
+          {icon}
+        </div>
+        {/* Optional decorative circle */}
+        <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full ${colorClass} opacity-5 group-hover:scale-110 transition-transform duration-500`}></div>
+      </div>
+      <div>
+        <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">{title}</p>
+        <h3 className="text-3xl font-extrabold text-slate-900 mt-1">{value}</h3>
+        {subtitle && <p className="text-xs text-slate-500 mt-2 font-medium">{subtitle}</p>}
+      </div>
+    </div>
+  </div>
+);
+
+const HorizontalBarChart = ({ data, labelKey, valueKey, colorFrom, colorTo }) => {
+  if (!data || data.length === 0) return <EmptyState message="No data available yet" />;
+
+  // Find max for scaling
+  const maxVal = Math.max(...data.map(d => parseInt(d[valueKey] || 0))) || 1;
 
   return (
-    <div className="space-y-3 mt-4">
-      {data.map((item, index) => {
-        const value = parseInt(item[valueKey] || 0);
-        const percentage = maxVal > 0 ? (value / maxVal) * 100 : 0;
+    <div className="space-y-5">
+      {data.map((item, idx) => {
+        const val = parseInt(item[valueKey] || 0);
+        const percent = (val / maxVal) * 100;
         
         return (
-          <div key={index} className="w-full">
-            <div className="flex justify-between text-xs mb-1 font-semibold text-gray-600">
-              <span>{item[labelKey] || 'Unknown'}</span>
-              <span>{value} Papers</span>
+          <div key={idx} className="group">
+            <div className="flex justify-between text-sm mb-1.5">
+              <span className="font-semibold text-slate-700">{item[labelKey] || 'Unknown'}</span>
+              <span className="text-slate-500 font-medium">{val} Papers</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2.5">
+            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
               <div 
-                className={`h-2.5 rounded-full ${color}`} 
-                style={{ width: `${percentage}%`, transition: 'width 1s ease-in-out' }}
-              ></div>
+                className={`h-full rounded-full bg-gradient-to-r ${colorFrom} ${colorTo} shadow-sm relative`}
+                style={{ width: `${percent}%`, transition: 'width 1.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
+              >
+                 {/* Shimmer effect */}
+                 <div className="absolute top-0 left-0 bottom-0 right-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer"></div>
+              </div>
             </div>
           </div>
         );
@@ -31,103 +55,162 @@ const SimpleBarChart = ({ data, labelKey, valueKey, color }) => {
   );
 };
 
-const StatCard = ({ title, count, icon, color }) => (
-  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-    <div>
-      <p className="text-sm font-medium text-gray-500">{title}</p>
-      <p className="text-2xl font-bold text-gray-800 mt-1">{count}</p>
-    </div>
-    <div className={`p-3 rounded-xl ${color} bg-opacity-10 text-xl`}>
-      {icon}
-    </div>
+const EmptyState = ({ message }) => (
+  <div className="flex flex-col items-center justify-center h-48 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+    <div className="text-3xl mb-2">📂</div>
+    <p className="text-sm text-slate-400 font-medium">{message}</p>
   </div>
 );
 
+// --- MAIN DASHBOARD COMPONENT ---
+
 export default function AnalyticsDashboard({ stats, role }) {
-  if (!stats) return <div className="animate-pulse h-64 bg-gray-100 rounded-2xl"></div>;
+  if (!stats) return <div className="animate-pulse h-96 bg-slate-100 rounded-2xl"></div>;
 
   const isStudent = role === 'Student';
 
+  // Calculate some derived stats for the top cards
+  const topStrand = stats.documentsByStrand?.[0];
+  const totalCount = stats.totalDocuments || 0;
+  
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       
-      {/* 1. TOP CARDS (Role Dependent) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Research Papers" count={stats.totalDocuments} icon="📚" color="bg-blue-500 text-blue-600" />
+      {/* 1. WELCOME BANNER (For Students) */}
+      {isStudent && (
+        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
+           <div className="relative z-10">
+              <h2 className="text-2xl font-bold mb-2">Student Research Hub</h2>
+              <p className="text-indigo-100 max-w-2xl">
+                 Welcome to the analytics dashboard. Here you can see the research contributions from different strands and year levels across the campus.
+              </p>
+           </div>
+           {/* Decorative background shapes */}
+           <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-10 translate-y-10">
+              <svg width="300" height="300" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <path fill="#FFFFFF" d="M44.7,-76.4C58.9,-69.2,71.8,-59.1,79.6,-46.3C87.4,-33.5,90.1,-18,88.5,-3.3C86.9,11.4,81,25.3,71.6,37.3C62.2,49.3,49.3,59.4,35.3,66.4C21.3,73.4,6.2,77.3,-8.2,75.5C-22.6,73.7,-36.3,66.2,-48.6,56.7C-60.9,47.2,-71.8,35.7,-78.3,21.9C-84.8,8.1,-86.9,-8,-82.2,-22.4C-77.5,-36.8,-66,-49.5,-52.8,-57.1C-39.6,-64.7,-24.7,-67.2,-10.4,-68.6C3.9,-70,18.2,-70.3,30.5,-83.6L44.7,-76.4Z" transform="translate(100 100)" />
+              </svg>
+           </div>
+        </div>
+      )}
+
+      {/* 2. KEY METRICS GRID */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard 
+            title="Total Papers" 
+            value={totalCount} 
+            icon="📚" 
+            colorClass="bg-blue-500 text-blue-600" 
+        />
         
+        <StatCard 
+            title="Top Strand" 
+            value={topStrand ? topStrand.strand : "N/A"} 
+            subtitle={topStrand ? `${topStrand.count} contributions` : "No data"}
+            icon="🏆" 
+            colorClass="bg-amber-500 text-amber-600" 
+        />
+        
+        {/* Only show User stats to privileged users */}
         {!isStudent && (
-          <>
-            <StatCard title="Total Users" count={stats.totalUsers} icon="👥" color="bg-indigo-500 text-indigo-600" />
-            <StatCard title="Active Users" count={stats.activeUsers} icon="🟢" color="bg-emerald-500 text-emerald-600" />
-            <StatCard title="Pending Requests" count={stats.pendingRequests} icon="🔔" color="bg-orange-500 text-orange-600" />
-          </>
+            <>
+                <StatCard 
+                    title="Total Users" 
+                    value={stats.totalUsers || 0} 
+                    icon="👥" 
+                    colorClass="bg-indigo-500 text-indigo-600" 
+                />
+                <StatCard 
+                    title="Pending Actions" 
+                    value={stats.pendingRequests || 0} 
+                    subtitle="Requires review"
+                    icon="🔔" 
+                    colorClass="bg-rose-500 text-rose-600" 
+                />
+            </>
         )}
         
+        {/* Placeholder for student layout balance if needed */}
         {isStudent && (
-           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 rounded-2xl shadow text-white md:col-span-3">
-             <h3 className="text-lg font-bold">🎓 Student Research Hub</h3>
-             <p className="text-indigo-100 text-sm mt-1">{stats.message}</p>
-           </div>
+             <StatCard 
+                title="System Status" 
+                value="Online" 
+                icon="🟢" 
+                colorClass="bg-emerald-500 text-emerald-600" 
+            />
+        )}
+         {isStudent && (
+             <StatCard 
+                title="Current Year" 
+                value={new Date().getFullYear()} 
+                icon="📅" 
+                colorClass="bg-slate-500 text-slate-600" 
+            />
         )}
       </div>
 
-      {/* 2. CHARTS SECTION */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* 3. CHARTS SECTION */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        {/* Chart A: By Strand */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800 mb-2">Research Output by Strand</h3>
-          <p className="text-xs text-gray-400 mb-4">Comparison of approved documents across tracks</p>
-          <SimpleBarChart 
-            data={stats.documentsByStrand} 
-            labelKey="strand" 
-            valueKey="count" 
-            color="bg-blue-500" 
-          />
+        {/* Strand Chart */}
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-slate-800">Contributions by Strand</h3>
+                <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full uppercase tracking-wide">Track Analysis</span>
+            </div>
+            <HorizontalBarChart 
+                data={stats.documentsByStrand} 
+                labelKey="strand" 
+                valueKey="count" 
+                colorFrom="from-blue-500"
+                colorTo="to-blue-400"
+            />
         </div>
 
-        {/* Chart B: By Year Level */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800 mb-2">Output by Year Level</h3>
-          <p className="text-xs text-gray-400 mb-4">Academic level contributions</p>
-          <SimpleBarChart 
-            data={stats.documentsByYear} 
-            labelKey="year_level" 
-            valueKey="count" 
-            color="bg-purple-500" 
-          />
+        {/* Year Level Chart */}
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-slate-800">Contributions by Year Level</h3>
+                <span className="px-3 py-1 bg-purple-50 text-purple-600 text-xs font-bold rounded-full uppercase tracking-wide">Academic Year</span>
+            </div>
+             <HorizontalBarChart 
+                data={stats.documentsByYear} 
+                labelKey="year_level" 
+                valueKey="count" 
+                colorFrom="from-purple-600"
+                colorTo="to-indigo-500"
+            />
         </div>
-
       </div>
 
-      {/* 3. ADMIN ONLY: Trends & Searches */}
+      {/* 4. ADMIN ONLY: SEARCH INSIGHTS */}
       {!isStudent && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-           {/* Top Searches */}
-           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">🔥 Top Search Terms</h3>
-              <div className="flex flex-wrap gap-2">
-                {stats.topSearches?.map((s, i) => (
-                  <span key={i} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium border border-gray-200">
-                    {s.term} <span className="text-gray-400 text-xs ml-1">({s.count})</span>
-                  </span>
-                ))}
-                {!stats.topSearches?.length && <p className="text-gray-400">No search data yet.</p>}
-              </div>
-           </div>
-           
-           {/* Simple Status Panel */}
-           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              
-              <div className="space-y-2 text-sm text-gray-600">
-                 <div className="flex justify-between border-b border-gray-50 pb-2">
-                    <span>Pending Documents Review</span>
-                    <span className="font-bold text-orange-500">{stats.pendingDocsCount}</span>
-                 </div>
-                 
-              </div>
-           </div>
-        </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+             <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+                 <h3 className="text-lg font-bold text-slate-800">Top Search Trends</h3>
+                 <span className="text-xs font-medium text-slate-400">Most frequent queries</span>
+             </div>
+             
+             <div className="p-6">
+                 {stats.topSearches && stats.topSearches.length > 0 ? (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                         {stats.topSearches.map((item, idx) => (
+                             <div key={idx} className="flex items-center p-3 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-sm transition-all">
+                                 <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 font-bold text-sm mr-3">
+                                     {idx + 1}
+                                 </span>
+                                 <div className="flex-1 min-w-0">
+                                     <p className="text-sm font-bold text-slate-700 truncate capitalize">{item.term}</p>
+                                     <p className="text-xs text-slate-400">{item.count} searches</p>
+                                 </div>
+                             </div>
+                         ))}
+                     </div>
+                 ) : (
+                     <EmptyState message="No search data recorded yet." />
+                 )}
+             </div>
+          </div>
       )}
     </div>
   );
