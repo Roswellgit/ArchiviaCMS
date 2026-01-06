@@ -1,47 +1,56 @@
 'use client';
 
 import { useAuth } from '../../context/AuthContext'; 
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
 export default function AdminLayout({ children }) {
   const { user, isAuthenticated, authLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
+    // 1. Wait for Auth to load
     if (authLoading) return;
 
-    // 1. Not logged in? -> Login
+    // 2. Not logged in? -> Go to Login
     if (!isAuthenticated) {
       router.push('/login'); 
       return;
     }
 
-    // 2. Define who is allowed in the Management Area
-    // STRICT: Only Super Admin, Admin, and Advisor
-    const allowedRoles = ['Super Admin', 'Admin', 'Advisor'];
-    const userRole = user?.role || 'User';
+    // 3. Define Allowed Roles
+    // robust check: handles case sensitivity and different naming conventions
+    const userRole = user?.role || '';
+    const isSuperAdmin = user?.is_super_admin || userRole === 'Super Admin';
+    const isAdmin = user?.is_admin || userRole === 'Admin' || isSuperAdmin;
+    const isAdvisor = userRole === 'Advisor' || userRole === 'Adviser';
 
-    if (!allowedRoles.includes(userRole)) {
-      // If a student (or normal user) tries to access Admin, send them to Analytics
+    // 4. Check Permission
+    if (!isAdmin && !isAdvisor) {
+      // If they are a Student or regular User, kick them out
+      // Redirect to Analytics (if you created it) or Home
       router.push('/analytics'); 
     }
-  }, [isAuthenticated, user, authLoading, router]);
+
+  }, [isAuthenticated, user, authLoading, router, pathname]);
 
   
   if (authLoading || !isAuthenticated) {
     return (
       <main className="container mx-auto p-20 text-center text-slate-400">
-        <div className="animate-pulse">Loading admin resources...</div>
+        <div className="animate-pulse">Verifying permissions...</div>
       </main>
     );
   }
 
-  // Double check render block logic
-  const allowedRoles = ['Super Admin', 'Admin', 'Advisor'];
-  if (!allowedRoles.includes(user?.role)) {
-      return null; // Don't render content while redirecting
-  }
+  // 5. Render Content (Only if allowed)
+  // We repeat the check here to prevent "flashing" the content before redirect
+  const userRole = user?.role || '';
+  const isAllowed = user?.is_admin || user?.is_super_admin || 
+                    ['Super Admin', 'Admin', 'Advisor', 'Adviser'].includes(userRole);
+
+  if (!isAllowed) return null;
 
   return (
     <main 
