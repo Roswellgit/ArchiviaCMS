@@ -14,6 +14,60 @@ import {
   getUserArchiveRequests, approveUserArchive, rejectUserArchive
 } from '../../services/apiService';
 
+// Helper Component for Tables to reduce code repetition
+const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon }) => (
+  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col h-full">
+    <div className={`px-6 py-4 border-b border-slate-50 ${colorClass} bg-opacity-5 flex justify-between items-center`}>
+       <div className="flex items-center gap-2">
+          <span className="text-xl">{icon}</span>
+          <h3 className={`font-bold text-lg ${colorClass}`}>{title}</h3>
+       </div>
+       <span className={`px-2 py-1 rounded text-xs font-bold bg-white border border-slate-100 shadow-sm ${colorClass}`}>
+          {items.length} Pending
+       </span>
+    </div>
+    
+    <div className="overflow-y-auto max-h-[300px] flex-1">
+      <table className="w-full text-left text-sm">
+        <tbody className="divide-y divide-slate-50">
+          {items.length === 0 ? (
+            <tr className="p-8 text-center text-slate-400 block w-full">
+              <td className="py-8 italic">{emptyMsg}</td>
+            </tr>
+          ) : (
+            items.map(item => (
+              <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
+                <td className="p-4 align-top">
+                   <p className="font-bold text-slate-700 block mb-1">
+                      {item.title || `${item.first_name} ${item.last_name}`}
+                   </p>
+                   {/* Show Author for docs, Reason for archives */}
+                   {item.author_name && <p className="text-xs text-slate-400">By: {item.author_name}</p>}
+                   {item.archive_reason && <p className="text-xs text-slate-500 italic bg-slate-50 p-1 rounded mt-1 border border-slate-100 inline-block">"{item.archive_reason}"</p>}
+                </td>
+                <td className="p-4 text-right align-top space-x-2 w-[160px]">
+                   <button 
+                      onClick={() => onAction(type, item.id, 'approve')} 
+                      className="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-emerald-600 transition-colors shadow-sm"
+                   >
+                     Approve
+                   </button>
+                   <button 
+                      onClick={() => onAction(type, item.id, 'reject')} 
+                      className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
+                   >
+                     Reject
+                   </button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
+
 export default function AdminDashboardPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -23,9 +77,6 @@ export default function AdminDashboardPage() {
   const [pendingUploads, setPendingUploads] = useState([]);
   const [docArchives, setDocArchives] = useState([]);
   const [userArchives, setUserArchives] = useState([]);
-  
-  // UI States
-  const [activeTab, setActiveTab] = useState('uploads'); // 'uploads' | 'docArchives' | 'userArchives'
 
   // Permission Helper
   const isPrivileged = user?.role === 'Admin' || user?.role === 'Super Admin' || user?.role === 'Advisor';
@@ -60,27 +111,23 @@ export default function AdminDashboardPage() {
   }, [user, isPrivileged]);
 
   // --- HANDLERS ---
-  
   const handleAction = async (type, id, action) => {
       const confirmMsg = `Are you sure you want to ${action} this request?`;
       if (!window.confirm(confirmMsg)) return;
 
       try {
           if (type === 'upload') {
-              if(action === 'approve') await approveDocument(id);
-              else await rejectDocument(id);
+              action === 'approve' ? await approveDocument(id) : await rejectDocument(id);
           } 
           else if (type === 'docArchive') {
-              if(action === 'approve') await approveDocArchive(id);
-              else await rejectDocArchive(id);
+              action === 'approve' ? await approveDocArchive(id) : await rejectDocArchive(id);
           }
           else if (type === 'userArchive') {
-              if(action === 'approve') await approveUserArchive(id);
-              else await rejectUserArchive(id);
+              action === 'approve' ? await approveUserArchive(id) : await rejectUserArchive(id);
           }
           
           toast.success("Success!");
-          fetchAllData(); // Refresh list immediately
+          fetchAllData(); 
       } catch (err) {
           toast.error("Action failed");
           console.error(err);
@@ -90,136 +137,92 @@ export default function AdminDashboardPage() {
   if (loading) return <div className="p-20 text-center text-slate-400">Loading dashboard...</div>;
 
   return (
-    <div className="space-y-8 animate-fade-in pb-10">
+    <div className="space-y-10 animate-fade-in pb-10">
       
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-gray-200 pb-6">
-        <div>
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                {isPrivileged ? 'Admin Dashboard' : 'Analytics Hub'}
-            </h2>
-            <p className="text-slate-500 mt-1">Overview for {user?.firstName}.</p>
-        </div>
+      <div className="border-b border-gray-200 pb-6">
+        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+             {isPrivileged ? 'Admin Dashboard' : 'Analytics Hub'}
+        </h2>
+        <p className="text-slate-500 mt-1">Welcome back, {user?.firstName}.</p>
       </div>
 
       {/* --- SECTION 1: STATS CARDS (Admins Only) --- */}
       {isPrivileged && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Users</p>
                 <h3 className="text-3xl font-extrabold text-slate-900 mt-2">{stats?.totalUsers || 0}</h3>
             </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Documents</p>
                 <h3 className="text-3xl font-extrabold text-slate-900 mt-2">{stats?.totalDocuments || 0}</h3>
             </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Tasks</p>
                 <h3 className="text-3xl font-extrabold text-orange-600 mt-2">
                     {pendingUploads.length + docArchives.length + userArchives.length}
                 </h3>
             </div>
-            <div className="bg-slate-900 p-6 rounded-2xl shadow-sm text-white flex flex-col justify-center">
-                <Link href="/admin/users" className="text-sm font-bold bg-indigo-600 hover:bg-indigo-500 py-2 px-4 rounded-lg text-center transition">
-                    Manage Users
+            <div className="bg-slate-900 p-6 rounded-2xl shadow-sm text-white flex flex-col justify-center hover:bg-slate-800 transition-colors cursor-pointer group">
+                <Link href="/admin/users" className="flex items-center justify-between">
+                   <div>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quick Action</p>
+                      <h3 className="text-xl font-bold mt-1">Manage Users &rarr;</h3>
+                   </div>
                 </Link>
             </div>
         </div>
       )}
 
-      {/* --- SECTION 2: PENDING ACTION CENTER (Admins Only) --- */}
+      {/* --- SECTION 2: THREE SEPARATE PENDING MODULES --- */}
       {isPrivileged && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-              <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-                  <h3 className="font-bold text-lg text-slate-800">Action Center</h3>
+          <div className="space-y-6">
+              <h3 className="text-xl font-bold text-slate-800">Pending Requests</h3>
+              
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   
-                  {/* TABS */}
-                  <div className="flex bg-white rounded-lg p-1 shadow-sm border border-gray-200">
-                      <button 
-                          onClick={() => setActiveTab('uploads')}
-                          className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'uploads' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                      >
-                          Uploads ({pendingUploads.length})
-                      </button>
-                      <button 
-                          onClick={() => setActiveTab('docArchives')}
-                          className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'docArchives' ? 'bg-orange-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                      >
-                          Doc Archives ({docArchives.length})
-                      </button>
-                      <button 
-                          onClick={() => setActiveTab('userArchives')}
-                          className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'userArchives' ? 'bg-red-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                      >
-                          User Archives ({userArchives.length})
-                      </button>
+                  {/* 1. DOCUMENT APPROVALS (Takes full width on large screens if needed, or half) */}
+                  <div className="xl:col-span-2">
+                     <RequestTable 
+                        title="Document Approvals" 
+                        items={pendingUploads} 
+                        type="upload" 
+                        onAction={handleAction} 
+                        emptyMsg="No new documents to review."
+                        colorClass="text-indigo-600"
+                        icon="📄"
+                     />
                   </div>
-              </div>
 
-              <div className="max-h-[400px] overflow-y-auto">
-                  {/* UPLOADS LIST */}
-                  {activeTab === 'uploads' && (
-                      <table className="w-full text-left text-sm">
-                          <tbody className="divide-y divide-gray-50">
-                              {pendingUploads.length === 0 ? <tr className="p-4 text-center text-gray-400 block w-full"><td>No pending uploads.</td></tr> : 
-                              pendingUploads.map(item => (
-                                  <tr key={item.id} className="hover:bg-gray-50">
-                                      <td className="p-4 font-medium">{item.title}</td>
-                                      <td className="p-4 text-gray-500">{item.author_name}</td>
-                                      <td className="p-4 text-right space-x-2">
-                                          <button onClick={() => handleAction('upload', item.id, 'approve')} className="text-green-600 font-bold text-xs hover:underline">Approve</button>
-                                          <button onClick={() => handleAction('upload', item.id, 'reject')} className="text-red-500 font-bold text-xs hover:underline">Reject</button>
-                                      </td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  )}
+                  {/* 2. DOCUMENT ARCHIVE REQUESTS */}
+                  <RequestTable 
+                      title="Doc Archive Requests" 
+                      items={docArchives} 
+                      type="docArchive" 
+                      onAction={handleAction} 
+                      emptyMsg="No document archive requests."
+                      colorClass="text-orange-600"
+                      icon="📦"
+                  />
 
-                  {/* DOC ARCHIVES LIST */}
-                  {activeTab === 'docArchives' && (
-                      <table className="w-full text-left text-sm">
-                          <tbody className="divide-y divide-gray-50">
-                              {docArchives.length === 0 ? <tr className="p-4 text-center text-gray-400 block w-full"><td>No document requests.</td></tr> : 
-                              docArchives.map(item => (
-                                  <tr key={item.id} className="hover:bg-gray-50">
-                                      <td className="p-4 font-medium">{item.title}</td>
-                                      <td className="p-4 text-gray-500 italic">"{item.archive_reason}"</td>
-                                      <td className="p-4 text-right space-x-2">
-                                          <button onClick={() => handleAction('docArchive', item.id, 'approve')} className="text-white bg-red-500 px-2 py-1 rounded text-xs font-bold">Archive</button>
-                                          <button onClick={() => handleAction('docArchive', item.id, 'reject')} className="text-gray-500 font-bold text-xs hover:underline">Decline</button>
-                                      </td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  )}
-
-                  {/* USER ARCHIVES LIST */}
-                  {activeTab === 'userArchives' && (
-                      <table className="w-full text-left text-sm">
-                          <tbody className="divide-y divide-gray-50">
-                              {userArchives.length === 0 ? <tr className="p-4 text-center text-gray-400 block w-full"><td>No user requests.</td></tr> : 
-                              userArchives.map(item => (
-                                  <tr key={item.id} className="hover:bg-gray-50">
-                                      <td className="p-4 font-medium">{item.first_name} {item.last_name}</td>
-                                      <td className="p-4 text-gray-500 italic">"{item.archive_reason}"</td>
-                                      <td className="p-4 text-right space-x-2">
-                                          <button onClick={() => handleAction('userArchive', item.id, 'approve')} className="text-white bg-red-600 px-2 py-1 rounded text-xs font-bold">Deactivate</button>
-                                          <button onClick={() => handleAction('userArchive', item.id, 'reject')} className="text-gray-500 font-bold text-xs hover:underline">Decline</button>
-                                      </td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  )}
+                  {/* 3. USER ARCHIVE REQUESTS */}
+                  <RequestTable 
+                      title="User Archive Requests" 
+                      items={userArchives} 
+                      type="userArchive" 
+                      onAction={handleAction} 
+                      emptyMsg="No user archive requests."
+                      colorClass="text-red-600"
+                      icon="👤"
+                  />
               </div>
           </div>
       )}
 
-      {/* --- SECTION 3: ANALYTICS (Visible to Everyone, content adapts inside component) --- */}
-      <div className="pt-4">
-         <h3 className="font-bold text-xl text-slate-800 mb-4">Research Analytics</h3>
+      {/* --- SECTION 3: ANALYTICS --- */}
+      <div className="pt-6 border-t border-slate-100">
+         <h3 className="text-xl font-bold text-slate-800 mb-6">Research Analytics</h3>
          <AnalyticsDashboard stats={stats} role={user?.role} />
       </div>
 
