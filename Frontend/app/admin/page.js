@@ -1,114 +1,227 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getAdminAnalytics } from '../../services/apiService';
-import { useAuth } from '../../context/AuthContext';
 import Link from 'next/link';
-import AnalyticsDashboard from '../../components/AnalyticsDashboard'; // Make sure this file exists from previous step
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
+import AnalyticsDashboard from '../../components/AnalyticsDashboard';
+
+// API Imports
+import { 
+  getAdminAnalytics, 
+  getPendingDocuments, approveDocument, rejectDocument,
+  getDocArchiveRequests, approveDocArchive, rejectDocArchive,
+  getUserArchiveRequests, approveUserArchive, rejectUserArchive
+} from '../../services/apiService';
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  
+  // Data States
+  const [stats, setStats] = useState(null);
+  const [pendingUploads, setPendingUploads] = useState([]);
+  const [docArchives, setDocArchives] = useState([]);
+  const [userArchives, setUserArchives] = useState([]);
+  
+  // UI States
+  const [activeTab, setActiveTab] = useState('uploads'); // 'uploads' | 'docArchives' | 'userArchives'
+
+  // Permission Helper
+  const isPrivileged = user?.role === 'Admin' || user?.role === 'Super Admin' || user?.role === 'Advisor';
+
+  // --- FETCH DATA ---
+  const fetchAllData = async () => {
+    try {
+      // 1. Always fetch Analytics
+      const statsRes = await getAdminAnalytics();
+      setStats(statsRes.data);
+
+      // 2. Only fetch Action Items if Admin/Advisor
+      if (isPrivileged) {
+        const [uploadsRes, docArcRes, userArcRes] = await Promise.all([
+            getPendingDocuments(),
+            getDocArchiveRequests(),
+            getUserArchiveRequests()
+        ]);
+        setPendingUploads(uploadsRes.data || uploadsRes);
+        setDocArchives(docArcRes.data || docArcRes);
+        setUserArchives(userArcRes.data || userArcRes);
+      }
+    } catch (err) {
+      console.error("Failed to load dashboard data", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await getAdminAnalytics();
-        setStats(res.data);
-      } catch (err) {
-        console.error("Failed to load stats");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStats();
-  }, []);
+    if (user) fetchAllData();
+  }, [user, isPrivileged]);
 
-  if (loading) return <div className="p-20 text-center text-slate-400">Loading dashboard data...</div>;
+  // --- HANDLERS ---
+  
+  const handleAction = async (type, id, action) => {
+      const confirmMsg = `Are you sure you want to ${action} this request?`;
+      if (!window.confirm(confirmMsg)) return;
+
+      try {
+          if (type === 'upload') {
+              if(action === 'approve') await approveDocument(id);
+              else await rejectDocument(id);
+          } 
+          else if (type === 'docArchive') {
+              if(action === 'approve') await approveDocArchive(id);
+              else await rejectDocArchive(id);
+          }
+          else if (type === 'userArchive') {
+              if(action === 'approve') await approveUserArchive(id);
+              else await rejectUserArchive(id);
+          }
+          
+          toast.success("Success!");
+          fetchAllData(); // Refresh list immediately
+      } catch (err) {
+          toast.error("Action failed");
+          console.error(err);
+      }
+  };
+
+  if (loading) return <div className="p-20 text-center text-slate-400">Loading dashboard...</div>;
 
   return (
-    <div className="space-y-10 animate-fade-in">
-      {/* Header */}
+    <div className="space-y-8 animate-fade-in pb-10">
+      
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-gray-200 pb-6">
         <div>
-            <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Overview</h2>
-            <p className="text-slate-500 mt-2 font-medium">Welcome back, {user?.firstName}. Here is what's happening today.</p>
+            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                {isPrivileged ? 'Admin Dashboard' : 'Analytics Hub'}
+            </h2>
+            <p className="text-slate-500 mt-1">Overview for {user?.firstName}.</p>
         </div>
       </div>
 
-      {/* --- SECTION 1: Key Metrics (Admins Only) --- */}
-      {user?.role !== 'Student' && (
+      {/* --- SECTION 1: STATS CARDS (Admins Only) --- */}
+      {isPrivileged && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Total Users */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-lg transition-all group">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Users</p>
-                        <h3 className="text-4xl font-extrabold text-slate-900 mt-2 group-hover:text-indigo-600 transition-colors">{stats?.totalUsers || 0}</h3>
-                    </div>
-                    <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-100 transition-colors">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    </div>
-                </div>
-                <div className="mt-4 pt-4 border-t border-slate-50 flex items-center text-sm text-green-600 font-bold">
-                    <span className="bg-green-100 px-1.5 py-0.5 rounded text-xs mr-2">LIVE</span>
-                    {stats?.activeUsers} Active Now
-                </div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Users</p>
+                <h3 className="text-3xl font-extrabold text-slate-900 mt-2">{stats?.totalUsers || 0}</h3>
             </div>
-
-            {/* Total Documents */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-lg transition-all group">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Documents</p>
-                        <h3 className="text-4xl font-extrabold text-slate-900 mt-2 group-hover:text-indigo-600 transition-colors">{stats?.totalDocuments || 0}</h3>
-                    </div>
-                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-100 transition-colors">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                    </div>
-                </div>
-                <p className="mt-4 pt-4 border-t border-slate-50 text-xs text-slate-400 font-medium">Indexed across all categories</p>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Documents</p>
+                <h3 className="text-3xl font-extrabold text-slate-900 mt-2">{stats?.totalDocuments || 0}</h3>
             </div>
-
-            {/* Pending Requests */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-lg transition-all group">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending</p>
-                        <h3 className="text-4xl font-extrabold text-slate-900 mt-2 group-hover:text-orange-500 transition-colors">{stats?.pendingRequests || 0}</h3>
-                    </div>
-                    <div className="p-3 bg-orange-50 text-orange-500 rounded-xl group-hover:bg-orange-100 transition-colors">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    </div>
-                </div>
-                <p className="mt-4 pt-4 border-t border-slate-50 text-xs text-orange-600 font-bold">Action required immediately</p>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Tasks</p>
+                <h3 className="text-3xl font-extrabold text-orange-600 mt-2">
+                    {pendingUploads.length + docArchives.length + userArchives.length}
+                </h3>
             </div>
-
-            {/* Quick Actions Card */}
-            <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800 hover:shadow-lg transition-all group relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-10">
-                    <svg className="w-24 h-24 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
-                </div>
-                <div className="relative z-10">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quick Actions</p>
-                    <div className="mt-4 flex flex-col gap-2">
-                        <Link href="/admin/documents" className="block w-full py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-500 transition text-center">
-                            Review Documents
-                        </Link>
-                        <Link href="/admin/users" className="block w-full py-2 bg-slate-700 text-slate-200 rounded-lg text-sm font-bold hover:bg-slate-600 transition text-center">
-                            Manage Users
-                        </Link>
-                    </div>
-                </div>
+            <div className="bg-slate-900 p-6 rounded-2xl shadow-sm text-white flex flex-col justify-center">
+                <Link href="/admin/users" className="text-sm font-bold bg-indigo-600 hover:bg-indigo-500 py-2 px-4 rounded-lg text-center transition">
+                    Manage Users
+                </Link>
             </div>
         </div>
       )}
 
-      {/* --- SECTION 2: Advanced Visualizations (The New Stuff) --- */}
-      {/* This component handles the Bar Charts for Strand, Year Level, etc. */}
-      {/* We pass the stats object which now contains 'documentsByStrand', etc. */}
-      <AnalyticsDashboard stats={stats} role={user?.role} />
+      {/* --- SECTION 2: PENDING ACTION CENTER (Admins Only) --- */}
+      {isPrivileged && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                  <h3 className="font-bold text-lg text-slate-800">Action Center</h3>
+                  
+                  {/* TABS */}
+                  <div className="flex bg-white rounded-lg p-1 shadow-sm border border-gray-200">
+                      <button 
+                          onClick={() => setActiveTab('uploads')}
+                          className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'uploads' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                      >
+                          Uploads ({pendingUploads.length})
+                      </button>
+                      <button 
+                          onClick={() => setActiveTab('docArchives')}
+                          className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'docArchives' ? 'bg-orange-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                      >
+                          Doc Archives ({docArchives.length})
+                      </button>
+                      <button 
+                          onClick={() => setActiveTab('userArchives')}
+                          className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'userArchives' ? 'bg-red-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                      >
+                          User Archives ({userArchives.length})
+                      </button>
+                  </div>
+              </div>
+
+              <div className="max-h-[400px] overflow-y-auto">
+                  {/* UPLOADS LIST */}
+                  {activeTab === 'uploads' && (
+                      <table className="w-full text-left text-sm">
+                          <tbody className="divide-y divide-gray-50">
+                              {pendingUploads.length === 0 ? <tr className="p-4 text-center text-gray-400 block w-full"><td>No pending uploads.</td></tr> : 
+                              pendingUploads.map(item => (
+                                  <tr key={item.id} className="hover:bg-gray-50">
+                                      <td className="p-4 font-medium">{item.title}</td>
+                                      <td className="p-4 text-gray-500">{item.author_name}</td>
+                                      <td className="p-4 text-right space-x-2">
+                                          <button onClick={() => handleAction('upload', item.id, 'approve')} className="text-green-600 font-bold text-xs hover:underline">Approve</button>
+                                          <button onClick={() => handleAction('upload', item.id, 'reject')} className="text-red-500 font-bold text-xs hover:underline">Reject</button>
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  )}
+
+                  {/* DOC ARCHIVES LIST */}
+                  {activeTab === 'docArchives' && (
+                      <table className="w-full text-left text-sm">
+                          <tbody className="divide-y divide-gray-50">
+                              {docArchives.length === 0 ? <tr className="p-4 text-center text-gray-400 block w-full"><td>No document requests.</td></tr> : 
+                              docArchives.map(item => (
+                                  <tr key={item.id} className="hover:bg-gray-50">
+                                      <td className="p-4 font-medium">{item.title}</td>
+                                      <td className="p-4 text-gray-500 italic">"{item.archive_reason}"</td>
+                                      <td className="p-4 text-right space-x-2">
+                                          <button onClick={() => handleAction('docArchive', item.id, 'approve')} className="text-white bg-red-500 px-2 py-1 rounded text-xs font-bold">Archive</button>
+                                          <button onClick={() => handleAction('docArchive', item.id, 'reject')} className="text-gray-500 font-bold text-xs hover:underline">Decline</button>
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  )}
+
+                  {/* USER ARCHIVES LIST */}
+                  {activeTab === 'userArchives' && (
+                      <table className="w-full text-left text-sm">
+                          <tbody className="divide-y divide-gray-50">
+                              {userArchives.length === 0 ? <tr className="p-4 text-center text-gray-400 block w-full"><td>No user requests.</td></tr> : 
+                              userArchives.map(item => (
+                                  <tr key={item.id} className="hover:bg-gray-50">
+                                      <td className="p-4 font-medium">{item.first_name} {item.last_name}</td>
+                                      <td className="p-4 text-gray-500 italic">"{item.archive_reason}"</td>
+                                      <td className="p-4 text-right space-x-2">
+                                          <button onClick={() => handleAction('userArchive', item.id, 'approve')} className="text-white bg-red-600 px-2 py-1 rounded text-xs font-bold">Deactivate</button>
+                                          <button onClick={() => handleAction('userArchive', item.id, 'reject')} className="text-gray-500 font-bold text-xs hover:underline">Decline</button>
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  )}
+              </div>
+          </div>
+      )}
+
+      {/* --- SECTION 3: ANALYTICS (Visible to Everyone, content adapts inside component) --- */}
+      <div className="pt-4">
+         <h3 className="font-bold text-xl text-slate-800 mb-4">Research Analytics</h3>
+         <AnalyticsDashboard stats={stats} role={user?.role} />
+      </div>
 
     </div>
   );

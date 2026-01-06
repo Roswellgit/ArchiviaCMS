@@ -118,16 +118,13 @@ export default function AnalyticsDashboard({ stats, role }) {
            
            {/* Simple Status Panel */}
            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">System Status</h3>
+              
               <div className="space-y-2 text-sm text-gray-600">
                  <div className="flex justify-between border-b border-gray-50 pb-2">
                     <span>Pending Documents Review</span>
                     <span className="font-bold text-orange-500">{stats.pendingDocsCount}</span>
                  </div>
-                 <div className="flex justify-between border-b border-gray-50 pb-2">
-                    <span>System Status</span>
-                    <span className="font-bold text-emerald-500">Operational</span>
-                 </div>
+                 
               </div>
            </div>
         </div>
