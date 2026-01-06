@@ -12,6 +12,7 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
+
 exports.register = async (req, res) => {
   const { firstName, lastName, email, password } = req.body;
 
@@ -126,6 +127,10 @@ exports.login = async (req, res) => {
         return res.status(403).json({ message: 'Please verify your email address before logging in.' });
     }
 
+    if (!user.password_hash) {
+       return res.status(401).json({ message: 'Please login using Google.' });
+    }
+
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatch) {
       return res.status(401).json({ message: 'Invalid credentials.' });
@@ -232,57 +237,28 @@ exports.googleLogin = async (req, res) => {
   }
 };
 
-exports.forgotPassword = async (req, res) => {
-  const { email } = req.body;
+
+exports.getProfile = async (req, res) => {
   try {
-    const user = await userModel.findByEmail(email);
+    const user = await userModel.findById(req.user.userId);
     if (!user) {
-      return res.json({ message: 'If that email exists, a reset link has been sent.' });
+      return res.status(404).json({ message: 'User not found' });
     }
-
-    const token = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 3600000); 
-
-    await userModel.saveResetToken(email, token, expires);
     
-    emailService.sendPasswordReset(email, token).catch(err => console.error("Reset Email Error:", err));
-
-    res.json({ message: 'If that email exists, a reset link has been sent.' });
+    res.json({
+      id: user.id,
+      email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      is_admin: user.is_admin,
+      is_super_admin: user.is_super_admin
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error.' });
+    console.error(err.message);
+    res.status(500).send('Server error');
   }
 };
 
-exports.resetPassword = async (req, res) => {
-  const { token, password } = req.body;
-  
-  if (!passwordRegex.test(password)) {
-     return res.status(400).json({ 
-       message: 'Password is too weak.',
-       details: 'Must be 8+ chars with uppercase, lowercase, number, and special char.'
-     });
-  }
-
-  try {
-    const user = await userModel.findByResetToken(token);
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired token.' });
-    }
-
-    const passwordHash = await bcrypt.hash(password, saltRounds);
-    await userModel.updatePassword(user.id, passwordHash);
-
-    res.json({ message: 'Password updated successfully. You can now login.' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error.' });
-  }
-};
-
-// --- NEW 2-STEP UPDATE PROFILE LOGIC ---
-
-// STEP 1: Initiate Update (Validates, Saves Pending, Sends OTP)
 exports.initiateUpdateProfile = async (req, res) => {
   const { firstName, lastName, email, password } = req.body;
   const userId = req.user.userId;
@@ -292,7 +268,6 @@ exports.initiateUpdateProfile = async (req, res) => {
   }
 
   try {
-    // Check email uniqueness if email is changing
     if (email) {
       const existingUser = await userModel.findByEmail(email);
       if (existingUser && existingUser.id !== userId) {
@@ -300,10 +275,8 @@ exports.initiateUpdateProfile = async (req, res) => {
       }
     }
 
-    // Prepare update data
     const updateData = { firstName, lastName, email };
 
-    // Handle password change if provided
     if (password && password.trim() !== "") {
       if (!passwordRegex.test(password)) {
         return res.status(400).json({
@@ -314,14 +287,11 @@ exports.initiateUpdateProfile = async (req, res) => {
       updateData.password_hash = await bcrypt.hash(password, saltRounds);
     }
 
-    // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    const expiry = new Date(Date.now() + 10 * 60 * 1000); 
 
-    // Save changes to "pending" columns
     await userModel.savePendingUpdate(userId, updateData, otp, expiry);
 
-    // Send OTP to the CURRENT verified email (from token/DB), not the new email
     const currentUser = await userModel.findById(userId);
     await emailService.sendUpdateOtp(currentUser.email, otp);
 
@@ -336,7 +306,6 @@ exports.initiateUpdateProfile = async (req, res) => {
   }
 };
 
-// STEP 2: Verify & Apply (Checks OTP, Commits Change, Returns New Token)
 exports.verifyUpdateProfile = async (req, res) => {
   const { otp } = req.body;
   const userId = req.user.userId;
@@ -344,7 +313,6 @@ exports.verifyUpdateProfile = async (req, res) => {
   if (!otp) return res.status(400).json({ message: 'OTP is required' });
 
   try {
-    // Get pending data
     const pending = await userModel.getPendingUpdate(userId);
 
     if (!pending || !pending.update_otp) {
@@ -359,13 +327,9 @@ exports.verifyUpdateProfile = async (req, res) => {
       return res.status(400).json({ message: 'OTP has expired.' });
     }
 
-    // Apply the actual update
     await userModel.applyUserUpdate(userId, pending.pending_update_data);
-    
-    // Clear pending data
     await userModel.clearPendingUpdate(userId);
 
-    // Fetch the updated user to generate a fresh token
     const updatedUser = await userModel.findById(userId);
 
     const token = jwt.sign(
@@ -400,35 +364,57 @@ exports.verifyUpdateProfile = async (req, res) => {
   }
 };
 
-// --- END NEW LOGIC ---
 
-exports.getProfile = async (req, res) => {
+exports.requestPasswordChangeOTP = async (req, res) => {
+  const { currentPassword } = req.body;
+  const userId = req.user.userId;
+
+  if (!currentPassword) {
+    return res.status(400).json({ message: 'Current password is required.' });
+  }
+
   try {
-    const user = await userModel.findById(req.user.userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+
+    const result = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = result.rows[0];
+
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    if (!user.password_hash) {
+        return res.status(400).json({ 
+            message: 'You are using a social login (Google) and do not have a password set. Please use "Forgot Password" to create one.' 
+        });
     }
-    
-    res.json({
-      id: user.id,
-      email: user.email,
-      firstName: user.first_name,
-      lastName: user.last_name,
-      is_admin: user.is_admin,
-      is_super_admin: user.is_super_admin
-    });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Incorrect current password.' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+    await db.query(
+      'UPDATE users SET otp_code = $1, otp_expires = $2 WHERE id = $3',
+      [otp, otpExpires, userId]
+    );
+
+    await emailService.sendOTP(user.email, otp); 
+
+    res.json({ message: 'OTP sent to your email. Please verify to change password.' });
+
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
+    console.error("Request Password OTP Error:", err);
+    res.status(500).json({ message: 'Server error requesting OTP.' });
   }
 };
 
 exports.changePassword = async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
+  const { otp, newPassword } = req.body;
   const userId = req.user.userId;
 
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ message: 'Current and new passwords are required.' });
+  if (!otp || !newPassword) {
+    return res.status(400).json({ message: 'OTP and new password are required.' });
   }
 
   if (!passwordRegex.test(newPassword)) {
@@ -439,24 +425,81 @@ exports.changePassword = async (req, res) => {
   }
 
   try {
-    const user = await userModel.findByEmail(req.user.email);
 
-    if (!user) {
-        return res.status(404).json({ message: 'User not found.' });
+    const result = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = result.rows[0];
+
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    if (!user.otp_code || user.otp_code.trim() !== otp.toString().trim()) {
+      return res.status(400).json({ message: 'Invalid OTP.' });
     }
-
-    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Incorrect current password.' });
+    if (new Date() > new Date(user.otp_expires)) {
+      return res.status(400).json({ message: 'OTP has expired.' });
     }
 
     const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
     await userModel.updatePassword(userId, newPasswordHash);
+
+    await db.query(
+      'UPDATE users SET otp_code = NULL, otp_expires = NULL WHERE id = $1',
+      [userId]
+    );
 
     res.json({ message: 'Password changed successfully.' });
 
   } catch (err) {
-    console.error(err);
+    console.error("Change Password Error:", err);
     res.status(500).json({ message: 'Server error changing password.' });
+  }
+};
+
+
+exports.forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  try {
+    const user = await userModel.findByEmail(email);
+    if (!user) {
+      return res.json({ message: 'If that email exists, a reset link has been sent.' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 3600000); 
+
+    await userModel.saveResetToken(email, token, expires);
+    
+    emailService.sendPasswordReset(email, token).catch(err => console.error("Reset Email Error:", err));
+
+    res.json({ message: 'If that email exists, a reset link has been sent.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  const { token, password } = req.body;
+  
+  if (!passwordRegex.test(password)) {
+     return res.status(400).json({ 
+       message: 'Password is too weak.',
+       details: 'Must be 8+ characters with uppercase, lowercase, number, and special chararacter.'
+     });
+  }
+
+  try {
+    const user = await userModel.findByResetToken(token);
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired token.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+    await userModel.updatePassword(user.id, passwordHash);
+
+    res.json({ message: 'Password updated successfully. You can now login.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error.' });
   }
 };

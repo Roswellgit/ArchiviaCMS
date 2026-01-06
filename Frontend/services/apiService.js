@@ -72,8 +72,12 @@ export const updateProfile = (data) => api.put('/auth/profile', data);
 export const updateUserProfile = updateProfile; 
 
 export const changePassword = (data) => api.put('/auth/change-password', data);
-export const changeUserPassword = (currentPassword, newPassword) => 
-    api.put('/auth/change-password', { currentPassword, newPassword });
+
+export const requestPasswordOTP = (currentPassword) => 
+    api.post('/auth/request-password-otp', { currentPassword });
+
+export const changeUserPassword = (otp, newPassword) => 
+    api.put('/auth/change-password', { otp, newPassword });
 
 export const uploadDocument = (formData, onUploadProgress) => api.post('/documents/upload', formData, {
     onUploadProgress
