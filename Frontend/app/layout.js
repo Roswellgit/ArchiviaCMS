@@ -84,7 +84,12 @@ export default async function RootLayout({ children }) {
        
         <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}> 
           <AuthProvider> 
-            <Toaster position="bottom-right" />
+            <Toaster 
+              position="bottom-right" 
+              toastOptions={{
+                duration: 5000, 
+              }}
+            /> 
             <Navbar />
             {children}
           </AuthProvider>
