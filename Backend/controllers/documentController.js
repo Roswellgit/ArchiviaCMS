@@ -167,20 +167,16 @@ exports.uploadDocument = (req, res) => {
     // Apply watermark ONLY if it is a PDF
     if (req.file.mimetype === 'application/pdf') {
         try {
-            const watermarkedBuffer = await watermarkService.addWatermark(
+            const watermarkedBuffer = await watermarkService.addWatermarkToPdf(
                 req.file.buffer, 
                 'Archivia - Intellectual Property' // You can customize this text
             );
             
-            // Replace the original buffer with the new watermarked one
-            // This ensures AI Analysis, Preview Generation, and S3 Upload 
-            // all use the protected version.
             req.file.buffer = watermarkedBuffer;
             req.file.size = watermarkedBuffer.length; 
             
         } catch (wmErr) {
             console.error("Watermarking failed, proceeding with original file:", wmErr);
-            // Optional: return res.status(500).send("Watermarking failed") if strict
         }
     }
     // --- END WATERMARK LOGIC ---
