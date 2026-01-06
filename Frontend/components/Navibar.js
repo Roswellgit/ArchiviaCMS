@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation'; 
 import { useAuth } from '../context/AuthContext'; 
-import { useState } from 'react'; 
+import { useState, useEffect } from 'react'; 
 
 export default function Navbar() {
   const { user, logout, isAuthenticated, authLoading } = useAuth();
@@ -13,22 +13,27 @@ export default function Navbar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false); 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); 
 
+  // --- ROLE CHECKS ---
+  const isSuperAdmin = user?.is_super_admin || user?.role === 'Super Admin';
+  // Note: This logic assumes anyone with Admin access sees the dashboard, so they don't need the link.
+  const isAdmin = user?.is_admin || user?.role === 'Admin' || isSuperAdmin; 
+  const isAdvisor = user?.role === 'Advisor' || user?.role === 'Adviser';
+  
+  const isPrivileged = isAdmin || isAdvisor;
+
   const isAuthPage = pathname === '/login' || pathname === '/register';
   const shouldShowLoginLink = !isAuthenticated && pathname !== '/login' && pathname !== '/register';
-  
-  const isAdmin = user?.is_admin;
-  const isSuperAdmin = user?.is_super_admin;
-  const isAdvisor = user?.role === 'Advisor'; 
-  // Helper for privileged access (Admins + Advisors)
-  const isPrivileged = isAdmin || isAdvisor;
+
+  useEffect(() => {
+    setIsDropdownOpen(false);
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
 
   const toggleDropdown = () => setIsDropdownOpen(!isDropdownOpen);
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
   const handleLogout = () => {
     logout();
-    setIsDropdownOpen(false);
-    setIsMobileMenuOpen(false);
     router.push('/login'); 
     router.refresh(); 
   };
@@ -69,9 +74,13 @@ export default function Navbar() {
             style={{ color: 'var(--navbar-text-color)' }}
           >
             {isMobileMenuOpen ? (
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             ) : (
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             )}
           </button>
 
@@ -80,12 +89,12 @@ export default function Navbar() {
             {!isAuthPage && !isAdmin && ( 
               <li><Link href="/" style={linkStyle} className="hover:text-indigo-600 transition-colors">Search</Link></li>
             )}
-            
-            {/* NEW: Analytics Link for Everyone */}
-            {isAuthenticated && (
+
+            {/* UPDATED: Only show Analytics if logged in AND NOT an Admin */}
+            {isAuthenticated && !isAdmin && (
                <li><Link href="/analytics" style={linkStyle} className="hover:text-indigo-600 transition-colors">Analytics</Link></li>
             )}
-
+            
             {isAuthenticated && !isAdmin && (
               <li><Link href="/upload" style={linkStyle} className="hover:text-indigo-600 transition-colors">Upload</Link></li>
             )}
@@ -97,34 +106,53 @@ export default function Navbar() {
                     {user?.firstName?.charAt(0)}
                   </div>
                   <span className="font-semibold">{user?.firstName}</span>
-                  {isSuperAdmin ? <span className="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">SA</span> : 
-                   isAdmin ? <span className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Admin</span> : null}
-                  <svg className={`h-4 w-4 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                  {isSuperAdmin ? <span className="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">SA</span> : 
+                   isAdmin ? <span className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">Admin</span> : null}
+                  <svg className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : 'rotate-0'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
                 </button>
 
+                {/* Dropdown Menu */}
                 {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-50 animate-fade-in origin-top-right ring-1 ring-black ring-opacity-5 focus:outline-none">
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-[100] animate-fade-in origin-top-right ring-1 ring-black ring-opacity-5 focus:outline-none">
                     <div className="px-4 py-2 border-b border-gray-50 mb-1">
                         <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">My Account</p>
                     </div>
                     
-                    {/* Admin Links */}
+                    {/* ADMIN SECTION */}
                     {isPrivileged && (
                       <div className="border-b border-gray-100 pb-1 mb-1">
-                        <Link href="/admin" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Admin Dashboard</Link>
-                        <Link href="/admin/users" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Manage Users</Link>
+                        <Link href="/admin" className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Admin Dashboard</Link>
+                        <Link href="/admin/users" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600">Manage Users</Link>
+                        
                         {isAdmin && (
-                          <Link href="/admin/documents" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Manage Documents</Link>
+                          <>
+                            <Link href="/admin/documents" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600">Manage Documents</Link>
+                            
+                            <div className="my-1 border-t border-slate-50"></div>
+                            <p className="px-4 py-1 text-[10px] text-gray-400 uppercase tracking-wider font-bold">Requests</p>
+                            
+                            <Link href="/admin/requests" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-orange-600">Deletion Requests</Link>
+                            <Link href="/admin/archive-requests" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-orange-600">Doc Archiving</Link>
+                            <Link href="/admin/user-archive-requests" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-red-600">User Archiving</Link>
+                            
+                            {isSuperAdmin && (
+                                <>
+                                  <div className="my-1 border-t border-slate-50"></div>
+                                  <Link href="/admin/theme" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-purple-600">Manage Theme</Link>
+                                </>
+                            )}
+                          </>
                         )}
-                        {/* Add other admin links here if needed */}
                       </div>
                     )}
                     
                     {!isAdmin && (
-                        <Link href="/my-uploads" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">My Submissions</Link>
+                        <Link href="/my-uploads" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">My Submissions</Link>
                     )}
 
-                    <Link href="/profile" onClick={() => setIsDropdownOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Profile Settings</Link>
+                    <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600">Profile Settings</Link>
                     
                     <div className="border-t border-gray-100 mt-1 pt-1">
                         <button onClick={handleLogout} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium">Sign Out</button>
@@ -145,28 +173,38 @@ export default function Navbar() {
         {isMobileMenuOpen && (
           <div className="md:hidden pb-4 pt-2">
              <ul className="flex flex-col space-y-4 font-medium text-sm bg-white/50 backdrop-blur-md rounded-xl p-4 shadow-lg">
-                {!isAuthPage && !isAdmin && <li><Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="block text-slate-700 hover:text-indigo-600">Search</Link></li>}
-                {isAuthenticated && <li><Link href="/analytics" onClick={() => setIsMobileMenuOpen(false)} className="block text-indigo-600 font-semibold">Analytics</Link></li>}
-                {isAuthenticated && !isAdmin && <li><Link href="/upload" onClick={() => setIsMobileMenuOpen(false)} className="block text-slate-700 hover:text-indigo-600">Upload</Link></li>}
+                {!isAuthPage && !isAdmin && <li><Link href="/" className="block text-slate-700 hover:text-indigo-600">Search</Link></li>}
+                
+                {/* UPDATED: Only show Analytics in mobile if NOT admin */}
+                {isAuthenticated && !isAdmin && <li><Link href="/analytics" className="block text-indigo-600">Analytics</Link></li>}
+                
+                {isAuthenticated && !isAdmin && <li><Link href="/upload" className="block text-slate-700 hover:text-indigo-600">Upload</Link></li>}
                 
                 {isAuthenticated ? (
                   <li className="pt-2 border-t border-gray-200">
                     <span className="block text-xs text-gray-400 uppercase tracking-wider mb-2">My Account ({user?.firstName})</span>
-                    <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-slate-700">Profile Settings</Link>
-                    {!isAdmin && <Link href="/my-uploads" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-slate-700">My Submissions</Link>}
+                    <Link href="/profile" className="block py-2 text-slate-700">Profile Settings</Link>
+                    {!isAdmin && <Link href="/my-uploads" className="block py-2 text-slate-700">My Submissions</Link>}
                     
                     {isPrivileged && (
-                        <>
-                          <Link href="/admin" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-indigo-600">Admin Dashboard</Link>
-                          <Link href="/admin/users" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-indigo-600">Manage Users</Link>
-                        </>
+                      <div className="pl-2 mt-2 border-l-2 border-indigo-100">
+                        <Link href="/admin" className="block py-2 text-indigo-600 font-bold">Admin Dashboard</Link>
+                        <Link href="/admin/users" className="block py-2 text-slate-600">Manage Users</Link>
+                        {isAdmin && (
+                            <>
+                                <Link href="/admin/requests" className="block py-2 text-slate-600">Deletion Requests</Link>
+                                <Link href="/admin/archive-requests" className="block py-2 text-slate-600">Doc Archiving</Link>
+                                <Link href="/admin/user-archive-requests" className="block py-2 text-slate-600">User Archiving</Link>
+                            </>
+                        )}
+                      </div>
                     )}
                     <button onClick={handleLogout} className="block w-full text-left py-2 text-red-600 mt-2">Sign Out</button>
                   </li>
                 ) : (
                   <li className="pt-2 border-t border-gray-200 flex flex-col gap-3">
-                      {shouldShowLoginLink && <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="block text-slate-700">Sign In</Link>}
-                      {!isAuthPage && <Link href="/register" onClick={() => setIsMobileMenuOpen(false)} className="block text-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg">Get Started</Link>}
+                      {shouldShowLoginLink && <Link href="/login" className="block text-slate-700">Sign In</Link>}
+                      {!isAuthPage && <Link href="/register" className="block text-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg">Get Started</Link>}
                   </li>
                 )}
              </ul>

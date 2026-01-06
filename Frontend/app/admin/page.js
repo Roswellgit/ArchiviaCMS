@@ -14,9 +14,10 @@ import {
   getUserArchiveRequests, approveUserArchive, rejectUserArchive
 } from '../../services/apiService';
 
-// Helper Component for Tables to reduce code repetition
+// --- HELPER COMPONENT: REQUEST TABLE ---
 const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon }) => (
-  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col h-full">
+  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col w-full">
+    {/* Header */}
     <div className={`px-6 py-4 border-b border-slate-50 ${colorClass} bg-opacity-5 flex justify-between items-center`}>
        <div className="flex items-center gap-2">
           <span className="text-xl">{icon}</span>
@@ -27,12 +28,13 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
        </span>
     </div>
     
-    <div className="overflow-y-auto max-h-[300px] flex-1">
+    {/* Table Body */}
+    <div className="overflow-y-auto max-h-[350px]">
       <table className="w-full text-left text-sm">
         <tbody className="divide-y divide-slate-50">
           {items.length === 0 ? (
             <tr className="p-8 text-center text-slate-400 block w-full">
-              <td className="py-8 italic">{emptyMsg}</td>
+              <td className="py-10 italic">{emptyMsg}</td>
             </tr>
           ) : (
             items.map(item => (
@@ -41,7 +43,6 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
                    <p className="font-bold text-slate-700 block mb-1">
                       {item.title || `${item.first_name} ${item.last_name}`}
                    </p>
-                   {/* Show Author for docs, Reason for archives */}
                    {item.author_name && <p className="text-xs text-slate-400">By: {item.author_name}</p>}
                    {item.archive_reason && <p className="text-xs text-slate-500 italic bg-slate-50 p-1 rounded mt-1 border border-slate-100 inline-block">"{item.archive_reason}"</p>}
                 </td>
@@ -69,7 +70,7 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
 );
 
 export default function AdminDashboardPage() {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   
   // Data States
@@ -78,17 +79,19 @@ export default function AdminDashboardPage() {
   const [docArchives, setDocArchives] = useState([]);
   const [userArchives, setUserArchives] = useState([]);
 
-  // Permission Helper
-  const isPrivileged = user?.role === 'Admin' || user?.role === 'Super Admin' || user?.role === 'Advisor';
+  // --- FIXED ROLE CHECK LOGIC ---
+  const userRole = user?.role || '';
+  const isSuperAdmin = user?.is_super_admin || userRole === 'Super Admin';
+  const isAdmin = user?.is_admin || userRole === 'Admin' || isSuperAdmin;
+  const isAdvisor = userRole === 'Advisor' || userRole === 'Adviser';
+  
+  const isPrivileged = isAdmin || isAdvisor;
 
-  // --- FETCH DATA ---
   const fetchAllData = async () => {
     try {
-      // 1. Always fetch Analytics
       const statsRes = await getAdminAnalytics();
       setStats(statsRes.data);
 
-      // 2. Only fetch Action Items if Admin/Advisor
       if (isPrivileged) {
         const [uploadsRes, docArcRes, userArcRes] = await Promise.all([
             getPendingDocuments(),
@@ -107,24 +110,19 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    if (user) fetchAllData();
-  }, [user, isPrivileged]);
+    if (!authLoading && user) {
+        fetchAllData();
+    }
+  }, [user, authLoading, isPrivileged]);
 
-  // --- HANDLERS ---
   const handleAction = async (type, id, action) => {
       const confirmMsg = `Are you sure you want to ${action} this request?`;
       if (!window.confirm(confirmMsg)) return;
 
       try {
-          if (type === 'upload') {
-              action === 'approve' ? await approveDocument(id) : await rejectDocument(id);
-          } 
-          else if (type === 'docArchive') {
-              action === 'approve' ? await approveDocArchive(id) : await rejectDocArchive(id);
-          }
-          else if (type === 'userArchive') {
-              action === 'approve' ? await approveUserArchive(id) : await rejectUserArchive(id);
-          }
+          if (type === 'upload') action === 'approve' ? await approveDocument(id) : await rejectDocument(id);
+          else if (type === 'docArchive') action === 'approve' ? await approveDocArchive(id) : await rejectDocArchive(id);
+          else if (type === 'userArchive') action === 'approve' ? await approveUserArchive(id) : await rejectUserArchive(id);
           
           toast.success("Success!");
           fetchAllData(); 
@@ -134,10 +132,10 @@ export default function AdminDashboardPage() {
       }
   };
 
-  if (loading) return <div className="p-20 text-center text-slate-400">Loading dashboard...</div>;
+  if (loading || authLoading) return <div className="p-20 text-center text-slate-400">Loading dashboard...</div>;
 
   return (
-    <div className="space-y-10 animate-fade-in pb-10">
+    <div className="space-y-12 animate-fade-in pb-24">
       
       {/* HEADER */}
       <div className="border-b border-gray-200 pb-6">
@@ -147,7 +145,7 @@ export default function AdminDashboardPage() {
         <p className="text-slate-500 mt-1">Welcome back, {user?.firstName}.</p>
       </div>
 
-      {/* --- SECTION 1: STATS CARDS (Admins Only) --- */}
+      {/* --- SECTION 1: STATS CARDS --- */}
       {isPrivileged && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
@@ -164,25 +162,34 @@ export default function AdminDashboardPage() {
                     {pendingUploads.length + docArchives.length + userArchives.length}
                 </h3>
             </div>
-            <div className="bg-slate-900 p-6 rounded-2xl shadow-sm text-white flex flex-col justify-center hover:bg-slate-800 transition-colors cursor-pointer group">
-                <Link href="/admin/users" className="flex items-center justify-between">
-                   <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quick Action</p>
-                      <h3 className="text-xl font-bold mt-1">Manage Users &rarr;</h3>
-                   </div>
+            
+            {/* UPDATED: QUICK ACTIONS CARD (Now has 2 buttons) */}
+            <div className="bg-slate-900 p-5 rounded-2xl shadow-sm text-white flex flex-col justify-center gap-2">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Quick Actions</p>
+                
+                <Link href="/admin/users" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
+                   <span className="font-bold text-sm">Manage Users</span>
+                   <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
+                </Link>
+                
+                <div className="border-t border-white/10"></div>
+                
+                <Link href="/admin/documents" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
+                   <span className="font-bold text-sm">Manage Documents</span>
+                   <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
                 </Link>
             </div>
         </div>
       )}
 
-      {/* --- SECTION 2: THREE SEPARATE PENDING MODULES --- */}
+      {/* --- SECTION 2: SEPARATE PENDING MODULES --- */}
       {isPrivileged && (
           <div className="space-y-6">
-              <h3 className="text-xl font-bold text-slate-800">Pending Requests</h3>
+              <h3 className="text-2xl font-bold text-slate-800 border-l-4 border-indigo-600 pl-4">Pending Requests</h3>
               
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                   
-                  {/* 1. DOCUMENT APPROVALS (Takes full width on large screens if needed, or half) */}
+                  {/* 1. DOCUMENT APPROVALS */}
                   <div className="xl:col-span-2">
                      <RequestTable 
                         title="Document Approvals" 
@@ -221,8 +228,8 @@ export default function AdminDashboardPage() {
       )}
 
       {/* --- SECTION 3: ANALYTICS --- */}
-      <div className="pt-6 border-t border-slate-100">
-         <h3 className="text-xl font-bold text-slate-800 mb-6">Research Analytics</h3>
+      <div className="mt-12 pt-12 border-t border-slate-200">
+         <h3 className="text-2xl font-bold text-slate-800 mb-8 border-l-4 border-blue-500 pl-4">Research Analytics</h3>
          <AnalyticsDashboard stats={stats} role={user?.role} />
       </div>
 

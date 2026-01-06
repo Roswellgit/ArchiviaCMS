@@ -8,13 +8,17 @@ const authMiddleware = require('../middleware/authMiddleware');
 router.post('/create-account', authMiddleware, adminController.createAccount);
 router.post('/create-group', authMiddleware, adminController.createGroup);
 
+// --- ANALYTICS (MOVED HERE) ---
+// We place this ABOVE the adminMiddleware check. 
+// We only use 'authMiddleware' because we want Students to access this too.
+router.get('/analytics', authMiddleware, adminController.getDashboardStats);
+
 // ------------------------------------------
 // PROTECT ALL ROUTES BELOW THIS LINE
 // ------------------------------------------
+// Anything below here requires the user to be an Admin or Advisor
 router.use(authMiddleware, adminMiddleware);
 
-// --- Analytics ---
-router.get('/analytics', adminController.getDashboardStats);
 
 // --- User Management ---
 router.get('/users', adminController.getAllUsers);

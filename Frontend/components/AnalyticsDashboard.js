@@ -1,6 +1,6 @@
 import React from 'react';
 
-// --- SUB-COMPONENTS FOR CLEANER CODE ---
+// --- SUB-COMPONENTS ---
 
 const StatCard = ({ title, value, subtitle, icon, colorClass }) => (
   <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-300 relative overflow-hidden group">
@@ -9,7 +9,6 @@ const StatCard = ({ title, value, subtitle, icon, colorClass }) => (
         <div className={`p-3 rounded-xl ${colorClass} bg-opacity-10 text-xl`}>
           {icon}
         </div>
-        {/* Optional decorative circle */}
         <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full ${colorClass} opacity-5 group-hover:scale-110 transition-transform duration-500`}></div>
       </div>
       <div>
@@ -24,7 +23,6 @@ const StatCard = ({ title, value, subtitle, icon, colorClass }) => (
 const HorizontalBarChart = ({ data, labelKey, valueKey, colorFrom, colorTo }) => {
   if (!data || data.length === 0) return <EmptyState message="No data available yet" />;
 
-  // Find max for scaling
   const maxVal = Math.max(...data.map(d => parseInt(d[valueKey] || 0))) || 1;
 
   return (
@@ -44,7 +42,6 @@ const HorizontalBarChart = ({ data, labelKey, valueKey, colorFrom, colorTo }) =>
                 className={`h-full rounded-full bg-gradient-to-r ${colorFrom} ${colorTo} shadow-sm relative`}
                 style={{ width: `${percent}%`, transition: 'width 1.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
               >
-                 {/* Shimmer effect */}
                  <div className="absolute top-0 left-0 bottom-0 right-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer"></div>
               </div>
             </div>
@@ -68,8 +65,6 @@ export default function AnalyticsDashboard({ stats, role }) {
   if (!stats) return <div className="animate-pulse h-96 bg-slate-100 rounded-2xl"></div>;
 
   const isStudent = role === 'Student';
-
-  // Calculate some derived stats for the top cards
   const topStrand = stats.documentsByStrand?.[0];
   const totalCount = stats.totalDocuments || 0;
   
@@ -85,7 +80,6 @@ export default function AnalyticsDashboard({ stats, role }) {
                  Welcome to the analytics dashboard. Here you can see the research contributions from different strands and year levels across the campus.
               </p>
            </div>
-           {/* Decorative background shapes */}
            <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-10 translate-y-10">
               <svg width="300" height="300" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
                 <path fill="#FFFFFF" d="M44.7,-76.4C58.9,-69.2,71.8,-59.1,79.6,-46.3C87.4,-33.5,90.1,-18,88.5,-3.3C86.9,11.4,81,25.3,71.6,37.3C62.2,49.3,49.3,59.4,35.3,66.4C21.3,73.4,6.2,77.3,-8.2,75.5C-22.6,73.7,-36.3,66.2,-48.6,56.7C-60.9,47.2,-71.8,35.7,-78.3,21.9C-84.8,8.1,-86.9,-8,-82.2,-22.4C-77.5,-36.8,-66,-49.5,-52.8,-57.1C-39.6,-64.7,-24.7,-67.2,-10.4,-68.6C3.9,-70,18.2,-70.3,30.5,-83.6L44.7,-76.4Z" transform="translate(100 100)" />
@@ -111,40 +105,31 @@ export default function AnalyticsDashboard({ stats, role }) {
             colorClass="bg-amber-500 text-amber-600" 
         />
         
-        {/* Only show User stats to privileged users */}
+        {/* Only show Total Users to privileged users. REMOVED Pending Actions card. */}
         {!isStudent && (
-            <>
-                <StatCard 
-                    title="Total Users" 
-                    value={stats.totalUsers || 0} 
-                    icon="👥" 
-                    colorClass="bg-indigo-500 text-indigo-600" 
-                />
-                <StatCard 
-                    title="Pending Actions" 
-                    value={stats.pendingRequests || 0} 
-                    subtitle="Requires review"
-                    icon="🔔" 
-                    colorClass="bg-rose-500 text-rose-600" 
-                />
-            </>
+            <StatCard 
+                title="Total Users" 
+                value={stats.totalUsers || 0} 
+                icon="👥" 
+                colorClass="bg-indigo-500 text-indigo-600" 
+            />
         )}
-        
-        {/* Placeholder for student layout balance if needed */}
-        {isStudent && (
+
+        {/* Dynamic Card based on role */}
+        {isStudent ? (
              <StatCard 
                 title="System Status" 
                 value="Online" 
                 icon="🟢" 
                 colorClass="bg-emerald-500 text-emerald-600" 
             />
-        )}
-         {isStudent && (
+        ) : (
              <StatCard 
-                title="Current Year" 
-                value={new Date().getFullYear()} 
-                icon="📅" 
-                colorClass="bg-slate-500 text-slate-600" 
+                title="Top Search" 
+                value={stats.topSearches?.[0]?.term || "N/A"} 
+                subtitle="Most frequent query"
+                icon="🔍" 
+                colorClass="bg-purple-500 text-purple-600" 
             />
         )}
       </div>
