@@ -4,7 +4,7 @@ const aiService = require('../services/aiService');
 const fileUploadService = require('../services/fileUploadService');
 const s3Service = require('../services/s3Service');
 const previewService = require('../services/previewService');
-const watermarkService = require('../services/watermarkService'); // <--- 1. Import this
+const watermarkService = require('../services/watermarkService'); 
 const path = require('path');
 
 const upload = fileUploadService.upload;
@@ -50,16 +50,19 @@ exports.getAllDocuments = async (req, res) => {
 };
 
 exports.searchDocuments = async (req, res) => {
-  const { term } = req.query;
+
+  const { term, q } = req.query; 
+  const searchTerm = term || q; 
+
   try {
     const isAdmin = req.user && (req.user.is_admin || req.user.is_super_admin);
     let rows;
     
-    if (!term) {
+    if (!searchTerm) {
         rows = await documentModel.findAll(isAdmin);
     } else {
-        analyticsModel.logSearch(term).catch(e => console.error("Analytics error:", e));
-        rows = await documentModel.findByTerm(term, isAdmin);
+        analyticsModel.logSearch(searchTerm).catch(e => console.error("Analytics error:", e));
+        rows = await documentModel.findByTerm(searchTerm, isAdmin);
     }
     const data = await sanitizeDocuments(req, rows);
     res.json(data);

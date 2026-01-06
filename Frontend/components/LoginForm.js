@@ -44,7 +44,7 @@ export default function LoginForm() {
       }, 5000);
     } catch (error) {
       const errorMessage = error.response?.status === 401
-        ? 'Login failed: Invalid password.'
+        ? 'Login failed: Invalid email or password.'
         : 'Login failed. User may not exist or error occurred.';
       toast.error(errorMessage, { id: toastId });
       console.error('Login error:', error);
