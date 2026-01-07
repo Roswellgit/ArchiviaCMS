@@ -169,7 +169,7 @@ exports.uploadDocument = (req, res) => {
         try {
             const watermarkedBuffer = await watermarkService.addWatermarkToPdf(
                 req.file.buffer, 
-                'Archivia - Intellectual Property' 
+                'Archivia' 
             );
             
             req.file.buffer = watermarkedBuffer;
