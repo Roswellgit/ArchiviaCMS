@@ -193,8 +193,8 @@ exports.saveResetToken = async (email, token, expires) => {
 
 exports.findByResetToken = async (token) => {
   const { rows } = await db.query(
-    'SELECT * FROM users WHERE reset_password_token = $1 AND reset_password_expires > NOW()',
-    [token]
+    'SELECT * FROM users WHERE reset_password_token = $1 AND reset_password_expires > $2',
+    [token, Date.now()] 
   );
   return rows[0];
 };

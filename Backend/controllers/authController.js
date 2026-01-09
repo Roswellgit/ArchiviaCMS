@@ -465,7 +465,7 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 3600000); 
+    const expires = Date.now() + 3600000;
 
     await userModel.saveResetToken(email, token, expires);
     
