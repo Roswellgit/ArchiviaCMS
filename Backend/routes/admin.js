@@ -2,29 +2,36 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 
-// ✅ FIX: Import the specific functions we created in authMiddleware
+// ✅ Import the updated middleware (which now allows Advisors)
 const { verifyToken, isAdmin } = require('../middleware/authMiddleware');
 
-// --- ACCOUNT & GROUP CREATION ---
-// Updated to use 'verifyToken' instead of 'authMiddleware'
-// Note: We use 'isAdmin' here because we updated it to allow Advisors too.
-router.post('/create-account', verifyToken, isAdmin, adminController.createAccount);
+// ==========================================
+// 1. ACCOUNT & GROUP CREATION
+// ==========================================
+
+// ✅ FIXED: Renamed '/create-account' to '/users' to match Frontend API call
+// Frontend calls: api.post('/admin/users', payload)
+router.post('/users', verifyToken, isAdmin, adminController.createAccount);
+
 router.post('/groups', verifyToken, isAdmin, adminController.createGroup);
 
-// --- ANALYTICS ---
-// We allow Students (just verifyToken), logic inside controller handles the view
+// ==========================================
+// 2. ANALYTICS (Accessible to Students/Advisors)
+// ==========================================
 router.get('/analytics', verifyToken, adminController.getDashboardStats);
 router.get('/analytics/insight', verifyToken, adminController.getAnalyticsAiInsight);
 
-// --- GROUPS (The line that caused the error) ---
+// ==========================================
+// 3. GROUPS
+// ==========================================
 router.get('/groups', verifyToken, isAdmin, adminController.getAllGroups);
+router.delete('/groups/:id', verifyToken, isAdmin, adminController.deleteGroup);
 
-// ------------------------------------------
-// PROTECT ALL ROUTES BELOW THIS LINE
-// ------------------------------------------
-// This applies the middleware to all routes defined after this point.
+// ==========================================
+// 4. PROTECT ALL REMAINING ROUTES
+// ==========================================
+// This applies verifyToken + isAdmin to everything below
 router.use(verifyToken, isAdmin);
-
 
 // --- User Management ---
 router.get('/users', adminController.getAllUsers);
@@ -37,15 +44,9 @@ router.delete('/user-archive-requests/:id/approve', adminController.approveUserA
 router.put('/user-archive-requests/:id/reject', adminController.rejectUserArchive);
 
 // --- Document Management ---
-
-// 1. Get Pending Queue
 router.get('/documents/pending', adminController.getPendingDocuments);
-
-// 2. Approve/Reject
 router.put('/documents/:id/approve', adminController.approveDocument);
 router.put('/documents/:id/reject', adminController.rejectDocument);
-
-// 3. General Admin Updates
 router.put('/documents/:id', adminController.adminUpdateDocument);
 router.delete('/documents/:id', adminController.adminDeleteDocument);
 router.post('/documents/:id/archive', adminController.adminRequestArchive);
@@ -72,7 +73,5 @@ router.post('/settings/reset', adminController.resetSettings);
 router.get('/options', adminController.getFormOptions);
 router.post('/options', adminController.addFormOption); 
 router.delete('/options', adminController.deleteFormOption);
-
-// ❌ REMOVED DUPLICATE/UNPROTECTED create-account route that was here
 
 module.exports = router;

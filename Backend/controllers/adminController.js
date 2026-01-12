@@ -9,17 +9,15 @@ const s3Service = require('../services/s3Service');
 const optionModel = require('../models/optionModel');
 const emailService = require('../services/emailService');
 const aiService = require('../services/aiService');
-
 const pool = require('../db');
 
-// --- HIERARCHICAL CREATION ---
-
-// --- HIERARCHICAL CREATION (Fixed for Pre-Verification) ---
+// ==========================================
+// 1. ACCOUNT & GROUP CREATION
+// ==========================================
 
 exports.createAccount = async (req, res) => {
   const client = await pool.connect(); 
   try {
-    // 1. UPDATED: Accept 'groupId' from the request
     const { firstName, lastName, email, password, role, accessLevel, schoolId, studentProfile, groupId } = req.body;
     const requester = req.user; 
 
@@ -27,20 +25,19 @@ exports.createAccount = async (req, res) => {
       return res.status(400).json({ message: 'All fields (including ID) are required' });
     }
 
-    // --- 2. HIERARCHY PERMISSION LOGIC ---
-    // Level 1: Standard Users -> Cannot create accounts
+    // --- PERMISSION LOGIC ---
     if (!requester.is_admin && !requester.is_super_admin && !requester.is_adviser) {
         return res.status(403).json({ message: 'Permission denied.' });
     }
     
-    // Level 2: Advisors -> Can ONLY create Students
+    // Advisors -> Can ONLY create Students
     if (requester.is_adviser && !requester.is_admin && !requester.is_super_admin) {
         if (accessLevel !== 'Student') { 
             return res.status(403).json({ message: 'Advisers can only create Student accounts.' });
         }
     }
     
-    // Level 3: Admins -> Can create Admins, Advisors, Students (NOT Super Admins)
+    // Admins -> Can create Admins, Advisors, Students (NOT Super Admins)
     if (requester.is_admin && !requester.is_super_admin) {
         if (accessLevel === 'Super Admin') {
             return res.status(403).json({ message: 'Admins cannot create Super Admin accounts.' });
@@ -49,29 +46,26 @@ exports.createAccount = async (req, res) => {
 
     await client.query('BEGIN'); 
 
-    // 3. Check Email
+    // Check Email
     const emailCheck = await client.query('SELECT id FROM users WHERE email = $1', [email]);
     if (emailCheck.rows.length > 0) {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: 'User already exists with this email.' });
     }
 
-    // 4. Check School ID
+    // Check School ID
     const idCheck = await client.query('SELECT id FROM users WHERE school_id = $1', [schoolId]);
     if (idCheck.rows.length > 0) {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: `The ID '${schoolId}' is already in use by another user.` });
     }
 
-    // 5. Hash Password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // --- 6. DETERMINE DB FLAGS ---
     const isSuperAdmin = accessLevel === 'Super Admin';
     const isAdmin = accessLevel === 'Admin' || isSuperAdmin;
     const isAdviser = accessLevel === 'Advisor';
     
-    // 7. Insert User (UPDATED WITH group_id)
     const insertUserQuery = `
       INSERT INTO users (
         first_name, last_name, email, password_hash, 
@@ -82,7 +76,6 @@ exports.createAccount = async (req, res) => {
       RETURNING id, email, role
     `;
     
-    // Use groupId if provided, otherwise null
     const finalGroupId = (groupId && groupId !== '') ? groupId : null;
 
     const userResult = await client.query(insertUserQuery, [
@@ -92,7 +85,6 @@ exports.createAccount = async (req, res) => {
 
     const newUserId = userResult.rows[0].id;
 
-    // 8. Handle Student Profile
     if (accessLevel === 'Student' && studentProfile) {
       const { yearLevel, strand, section } = studentProfile;
       await client.query(
@@ -102,8 +94,7 @@ exports.createAccount = async (req, res) => {
     }
 
     await client.query('COMMIT'); 
-    
-    emailService.sendWelcomeEmail(email, firstName, password);
+    emailService.sendWelcomeEmail(email, firstName, password).catch(console.error);
 
     res.status(201).json({
       message: `${role} (${accessLevel}) created successfully.`,
@@ -121,31 +112,32 @@ exports.createAccount = async (req, res) => {
 
 exports.createGroup = async (req, res) => {
   try {
-    const { name, adviserId } = req.body; // Accept adviserId for Admins
+    const { name, adviserId } = req.body; 
     const requester = req.user;
 
     if (!requester.is_adviser && !requester.is_admin && !requester.is_super_admin) {
         return res.status(403).json({ message: 'Only Advisers or Admins can create groups.' });
     }
 
-    if (!name) {
-      return res.status(400).json({ message: 'Group name is required.' });
-    }
+    if (!name) return res.status(400).json({ message: 'Group name is required.' });
 
     let finalAdviserId;
-
-    // LOGIC: If Advisor, they lead the group. If Admin, they assign someone.
     if (requester.is_adviser) {
         finalAdviserId = requester.id;
     } else {
-        // Admin is creating it
         finalAdviserId = adviserId || null; 
     }
 
-    // Pass the calculated finalAdviserId instead of just requester.id
-    const newGroup = await userModel.createGroup(name, finalAdviserId);
-
-    res.status(201).json({ message: 'Group created successfully', group: newGroup });
+    // ✅ UPDATED: Call model and handle duplicate error
+    try {
+        const newGroup = await userModel.createGroup(name, finalAdviserId);
+        res.status(201).json({ message: 'Group created successfully', group: newGroup });
+    } catch (modelErr) {
+        if (modelErr.message === 'Group name already exists' || modelErr.code === '23505') {
+            return res.status(409).json({ message: 'A group with this name already exists.' });
+        }
+        throw modelErr; // Re-throw unexpected errors
+    }
 
   } catch (error) {
     console.error('Error creating group:', error);
@@ -153,98 +145,45 @@ exports.createGroup = async (req, res) => {
   }
 };
 
-// ... (KEEP ALL EXISTING METHODS BELOW EXACTLY AS THEY WERE) ...
-exports.getDashboardStats = async (req, res) => {
+exports.getAllGroups = async (req, res) => {
   try {
-    // 1. Fetch Basic Data (Existing logic)
-    const users = await userModel.findAll();
-    const documents = await documentModel.findAll(true);
+    const result = await pool.query('SELECT * FROM groups ORDER BY name ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error fetching groups' });
+  }
+};
 
-    // 2. Fetch Graph Data (NEW: Needed for Graphs & Printable Report)
-    const [
-      topSearches,
-      uploadTrend,
-      topKeywords,
-      documentsByStrand,
-      documentsByYear
-    ] = await Promise.all([
-      analyticsModel.getTopSearches(5),
-      analyticsModel.getUploadTrends(),        
-      analyticsModel.getKeywordTrends(),       
-      analyticsModel.getDocumentsByStrand(),
-      analyticsModel.getDocumentsByYearLevel()
-    ]);
+// ✅ ADDED DELETE GROUP CONTROLLER
+exports.deleteGroup = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const requester = req.user;
 
-    // 3. Calculate Scalars (Existing logic)
-    const totalUsers = users.length;
-    const activeUsers = users.filter(u => u.is_active).length;
-    const totalDocuments = documents.length;
-    
-    const deletionRequests = documents.filter(d => d.deletion_requested).length;
-    const archiveRequests = documents.filter(d => d.archive_requested).length;
-    const userRequests = users.filter(u => u.archive_requested).length;
-    const pendingDocs = documents.filter(d => d.status === 'pending').length;
+    // Strictly Allow Only Admins/Super Admins
+    if (!requester.is_admin && !requester.is_super_admin) {
+        return res.status(403).json({ message: "Only Admins can delete groups." });
+    }
 
-    const pendingRequests = deletionRequests + archiveRequests + userRequests + pendingDocs;
+    const success = await userModel.deleteGroup(id);
+    if (!success) return res.status(404).json({ message: "Group not found." });
 
-    // 4. Send Combined Response
-    res.json({
-      // Basic Stats
-      totalUsers,
-      activeUsers,
-      totalDocuments,
-      pendingRequests,
-      
-      // Graph Data
-      topSearches,
-      uploadTrend,
-      topKeywords,
-      documentsByStrand,
-      documentsByYear
-    });
+    res.json({ message: "Group deleted successfully." });
 
   } catch (err) {
-    console.error("Analytics Error:", err.message);
-    res.status(500).send('Server error fetching stats');
+    console.error("Delete Group Error:", err);
+    res.status(500).json({ message: "Server error deleting group." });
   }
 };
 
-exports.getPendingDocuments = async (req, res) => {
-  try {
-    const docs = await documentModel.findPending();
-    res.json(docs);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to fetch pending documents' });
-  }
-};
-
-exports.approveDocument = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const doc = await documentModel.updateStatus(id, 'approved');
-    if (!doc) return res.status(404).json({ message: "Document not found" });
-    res.json({ message: 'Document approved successfully', doc });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to approve document' });
-  }
-};
-
-exports.rejectDocument = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const doc = await documentModel.updateStatus(id, 'rejected');
-    if (!doc) return res.status(404).json({ message: "Document not found" });
-    res.json({ message: 'Document rejected', doc });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to reject document' });
-  }
-};
+// ==========================================
+// 2. USER MANAGEMENT
+// ==========================================
 
 exports.getAllUsers = async (req, res) => {
   try {
+    // This returns ALL users. If you want Advisors to only see Students, filter here.
     const users = await userModel.findAll();
     res.json(users);
   } catch (err) {
@@ -257,8 +196,8 @@ exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const { first_name, last_name, email, is_admin } = req.body; 
-    if (typeof is_admin !== 'boolean') return res.status(400).json({ message: 'Invalid admin status specified.' });
-
+    
+    // Validate inputs if necessary
     const updatedUser = await userModel.updateUserDetails(id, { first_name, last_name, email, is_admin });
     if (!updatedUser) return res.status(404).json({ message: 'User not found.' });
     res.json(updatedUser);
@@ -349,6 +288,44 @@ exports.rejectUserArchive = async (req, res) => {
   }
 };
 
+// ==========================================
+// 3. DOCUMENT MANAGEMENT
+// ==========================================
+
+exports.getPendingDocuments = async (req, res) => {
+  try {
+    const docs = await documentModel.findPending();
+    res.json(docs);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch pending documents' });
+  }
+};
+
+exports.approveDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = await documentModel.updateStatus(id, 'approved');
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+    res.json({ message: 'Document approved successfully', doc });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to approve document' });
+  }
+};
+
+exports.rejectDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = await documentModel.updateStatus(id, 'rejected');
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+    res.json({ message: 'Document rejected', doc });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to reject document' });
+  }
+};
+
 exports.adminUpdateDocument = async (req, res) => {
   try {
     const { id } = req.params;
@@ -404,6 +381,10 @@ exports.restoreDocument = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
+
+// ==========================================
+// 4. REQUEST MANAGEMENT (Deletions & Archives)
+// ==========================================
 
 exports.getArchiveRequests = async (req, res) => {
   try {
@@ -482,6 +463,94 @@ exports.rejectDeletion = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
+
+// ==========================================
+// 5. ANALYTICS & DASHBOARD
+// ==========================================
+
+exports.getDashboardStats = async (req, res) => {
+  try {
+    // 1. Fetch Basic Data
+    const users = await userModel.findAll();
+    const documents = await documentModel.findAll(true);
+
+    // 2. Fetch Graph Data
+    const [
+      topSearches,
+      uploadTrend,
+      topKeywords,
+      documentsByStrand,
+      documentsByYear
+    ] = await Promise.all([
+      analyticsModel.getTopSearches(5),
+      analyticsModel.getUploadTrends(),        
+      analyticsModel.getKeywordTrends(),       
+      analyticsModel.getDocumentsByStrand(),
+      analyticsModel.getDocumentsByYearLevel()
+    ]);
+
+    // 3. Calculate Scalars
+    const totalUsers = users.length;
+    const activeUsers = users.filter(u => u.is_active).length;
+    const totalDocuments = documents.length;
+    
+    const deletionRequests = documents.filter(d => d.deletion_requested).length;
+    const archiveRequests = documents.filter(d => d.archive_requested).length;
+    const userRequests = users.filter(u => u.archive_requested).length;
+    const pendingDocs = documents.filter(d => d.status === 'pending').length;
+
+    const pendingRequests = deletionRequests + archiveRequests + userRequests + pendingDocs;
+
+    res.json({
+      totalUsers,
+      activeUsers,
+      totalDocuments,
+      pendingRequests,
+      topSearches,
+      uploadTrend,
+      topKeywords,
+      documentsByStrand,
+      documentsByYear
+    });
+
+  } catch (err) {
+    console.error("Analytics Error:", err.message);
+    res.status(500).send('Server error fetching stats');
+  }
+};
+
+exports.getAnalyticsAiInsight = async (req, res) => {
+  try {
+    const [
+      users, documents, topSearches, uploadTrend, topKeywords
+    ] = await Promise.all([
+      userModel.findAll(),
+      documentModel.findAll(true),
+      analyticsModel.getTopSearches(5),
+      analyticsModel.getUploadTrends(),
+      analyticsModel.getKeywordTrends()
+    ]);
+
+    const analysisData = {
+      totalUsers: users.length,
+      totalDocuments: documents.length,
+      topSearches,
+      uploadTrend,
+      topKeywords
+    };
+
+    const insightText = await aiService.generateDashboardInsight(analysisData);
+    res.json({ insight: insightText });
+
+  } catch (err) {
+    console.error('AI Insight Controller Error:', err);
+    res.status(500).json({ insight: "Automated insight could not be generated at this time." });
+  }
+};
+
+// ==========================================
+// 6. SETTINGS & FORM OPTIONS
+// ==========================================
 
 exports.updateSettings = async (req, res) => {
   try {
@@ -577,61 +646,20 @@ exports.removeBrandIcon = async (req, res) => {
   }
 };
 
-exports.getPendingDocuments = async (req, res) => {
-  try {
-    const docs = await documentModel.findPending();
-    res.json(docs);
-  } catch (err) {
-    console.error("Error fetching pending docs:", err.message);
-    res.status(500).send('Server error');
-  }
-};
-
-exports.approveDocument = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updated = await documentModel.updateStatus(id, 'approved');
-    if (!updated) return res.status(404).json({ message: "Document not found" });
-    res.json({ message: "Document approved successfully." });
-  } catch (err) {
-    console.error("Error approving document:", err.message);
-    res.status(500).send('Server error');
-  }
-};
-
-exports.rejectDocument = async (req, res) => {
-  try {
-    const { id } = req.params;
-    // You can delete it or set status to 'rejected'
-    const updated = await documentModel.updateStatus(id, 'rejected'); 
-    if (!updated) return res.status(404).json({ message: "Document not found" });
-    res.json({ message: "Document rejected." });
-  } catch (err) {
-    console.error("Error rejecting document:", err.message);
-    res.status(500).send('Server error');
-  }
-};
-
 exports.getFormOptions = async (req, res) => {
   try {
-    // UPDATED QUERY: Order by Type first, then by Value (Alphabetical)
-    // If you want them sorted by when you added them, change 'value ASC' to 'id ASC'
     const query = `SELECT * FROM form_options ORDER BY type, value ASC`;
-    
     const { rows } = await pool.query(query);
     
-    // Transform flat DB rows into grouped object
     const grouped = rows.reduce((acc, item) => {
-      const key = item.type + 's'; // e.g., 'roles', 'strands'
+      const key = item.type + 's';
       if (!acc[key]) acc[key] = [];
       acc[key].push(item.value);
       return acc;
     }, { roles: [], strands: [], yearLevels: [] });
 
-    // OPTIONAL: Custom Sort for Year Levels (Because "Grade 10" comes before "Grade 2" alphabetically)
     if (grouped.yearLevels) {
         grouped.yearLevels.sort((a, b) => {
-            // Extract the number from "Grade 7"
             const numA = parseInt(a.replace(/\D/g, '')) || 0;
             const numB = parseInt(b.replace(/\D/g, '')) || 0;
             return numA - numB;
@@ -665,49 +693,5 @@ exports.deleteFormOption = async (req, res) => {
     res.json({ message: 'Option removed' });
   } catch (err) {
     res.status(500).json({ message: 'Error deleting option' });
-  }
-};
-
-exports.getAnalyticsAiInsight = async (req, res) => {
-  try {
-    // 1. Gather the data (same as dashboard)
-    const [
-      users, documents, topSearches, uploadTrend, topKeywords
-    ] = await Promise.all([
-      userModel.findAll(),
-      documentModel.findAll(true),
-      analyticsModel.getTopSearches(5),
-      analyticsModel.getUploadTrends(),
-      analyticsModel.getKeywordTrends()
-    ]);
-
-    // 2. Prepare payload for AI
-    const analysisData = {
-      totalUsers: users.length,
-      totalDocuments: documents.length,
-      topSearches,
-      uploadTrend,
-      topKeywords
-    };
-
-    // 3. Ask AI for the summary
-    const insightText = await aiService.generateDashboardInsight(analysisData);
-
-    res.json({ insight: insightText });
-
-  } catch (err) {
-    console.error('AI Insight Controller Error:', err);
-    res.status(500).json({ insight: "Automated insight could not be generated at this time." });
-  }
-};
-
-exports.getAllGroups = async (req, res) => {
-  try {
-    // Basic query to get all groups
-    const result = await pool.query('SELECT * FROM groups ORDER BY name ASC');
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error fetching groups' });
   }
 };

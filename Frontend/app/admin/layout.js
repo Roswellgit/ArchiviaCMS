@@ -19,17 +19,14 @@ export default function AdminLayout({ children }) {
       return;
     }
 
-    // 3. Define Allowed Roles
-    // robust check: handles case sensitivity and different naming conventions
-    const userRole = user?.role || '';
-    const isSuperAdmin = user?.is_super_admin || userRole === 'Super Admin';
-    const isAdmin = user?.is_admin || userRole === 'Admin' || isSuperAdmin;
-    const isAdvisor = userRole === 'Advisor' || userRole === 'Adviser';
+    // 3. STRICT BOOLEAN CHECK
+    // We strictly rely on the flags provided by the backend token.
+    // This covers Admin, Super Admin, and Advisor.
+    const hasAccess = user?.is_admin || user?.is_super_admin || user?.is_adviser;
 
-    // 4. Check Permission
-    if (!isAdmin && !isAdvisor) {
-      // If they are a Student or regular User, kick them out
-      // Redirect to Analytics (if you created it) or Home
+    // 4. Redirect if no access
+    if (!hasAccess) {
+      // If they are a Student (or any role without these flags), kick them out
       router.push('/analytics'); 
     }
 
@@ -44,13 +41,10 @@ export default function AdminLayout({ children }) {
     );
   }
 
-  // 5. Render Content (Only if allowed)
-  // We repeat the check here to prevent "flashing" the content before redirect
-  const userRole = user?.role || '';
-  const isAllowed = user?.is_admin || user?.is_super_admin || 
-                    ['Super Admin', 'Admin', 'Advisor', 'Adviser'].includes(userRole);
+  // 5. Render Content (Double-check permissions to prevent content flash)
+  const hasAccess = user?.is_admin || user?.is_super_admin || user?.is_adviser;
 
-  if (!isAllowed) return null;
+  if (!hasAccess) return null;
 
   return (
     <main 

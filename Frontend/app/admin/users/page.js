@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../context/AuthContext';
-import api from '../../../services/apiService'; // Ensure this points to your axios instance
+import api from '../../../services/apiService'; 
 import { getAllUsers, adminUpdateUser, adminDeleteUser } from '../../../services/apiService';
 import EditUserModal from '../../../components/EditUserModal';
 
@@ -47,7 +47,6 @@ export default function ManageUsersPage() {
       const userList = Array.isArray(usersResponse) ? usersResponse : (usersResponse.data || []);
       
       // Fetch Groups (New Endpoint)
-      // If this endpoint doesn't exist yet, it will just return empty array catch block
       let groupList = [];
       try {
          const groupsRes = await api.get('/admin/groups');
@@ -116,11 +115,26 @@ export default function ManageUsersPage() {
       setNewGroup({ name: '' });
       fetchData(); // Refresh groups
     } catch (err) {
-      toast.error("Failed to create group.");
+      toast.error(err.response?.data?.message || "Failed to create group.");
     }
   };
 
-  // Archive / Edit Logic (Kept from your original file)
+  // ✅ NEW: Delete Group Handler
+  const handleDeleteGroup = async (groupId, groupName) => {
+    if (!confirm(`Are you sure you want to delete the group "${groupName}"? Students in this group will be unassigned.`)) {
+        return;
+    }
+    try {
+        await api.delete(`/admin/groups/${groupId}`);
+        toast.success("Group deleted successfully.");
+        fetchData();
+    } catch (err) {
+        console.error("Delete Group Error:", err);
+        toast.error(err.response?.data?.message || "Failed to delete group.");
+    }
+  };
+
+  // Archive Logic
   const initiateArchive = (targetUser) => {
     if (targetUser.id === currentUser.userId) return toast.error("You cannot archive your own account.");
     
@@ -132,6 +146,7 @@ export default function ManageUsersPage() {
     }
   };
 
+  // Edit Logic (Function exists for modal, but button removed)
   const handleEdit = (user) => {
     setSelectedUser(user);
     setIsEditModalOpen(true);
@@ -151,11 +166,6 @@ export default function ManageUsersPage() {
   if (authLoading || loading) return <div className="p-10 text-center">Loading...</div>;
   if (!isPrivileged) return null; 
 
-  if (isAdvisor) {
-    console.log("I am an Advisor! Access Granted.");
-} else {
-    console.log("Access Denied. Current User:", user);
-}
   return (
     <div className="space-y-6 animate-fade-in pb-24">
       
@@ -223,8 +233,9 @@ export default function ManageUsersPage() {
                   </span>
                 </td>
                 <td className="px-6 py-4 space-x-3">
-                    <button onClick={() => handleEdit(u)} className="text-indigo-600 hover:text-indigo-900 font-medium">Edit</button>
-                    {/* Only show Archive if Admin, or if Advisor allows archiving students */}
+                    {/* ❌ REMOVED EDIT BUTTON as requested */}
+                    
+                    {/* Only show Archive if Admin */}
                     {isAdmin && (
                         <button onClick={() => initiateArchive(u)} className="text-red-500 hover:text-red-700 font-medium">Archive</button>
                     )}
@@ -235,6 +246,41 @@ export default function ManageUsersPage() {
         </table>
         {users.length === 0 && <div className="p-8 text-center text-slate-400">No users found.</div>}
       </div>
+
+      {/* --- GROUPS MANAGEMENT SECTION (ADMINS ONLY) --- */}
+      {isAdmin && (
+        <div className="mt-12">
+            <h2 className="text-2xl font-bold text-slate-800 mb-4">Manage Groups</h2>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            <th className="px-6 py-3 font-semibold text-slate-600">Group Name</th>
+                            <th className="px-6 py-3 font-semibold text-slate-600">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {groups.map(g => (
+                            <tr key={g.id} className="hover:bg-slate-50">
+                                <td className="px-6 py-4 font-medium text-slate-900">{g.name}</td>
+                                <td className="px-6 py-4">
+                                    <button 
+                                        onClick={() => handleDeleteGroup(g.id, g.name)}
+                                        className="text-red-600 hover:text-red-800 font-medium transition"
+                                    >
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                        {groups.length === 0 && (
+                            <tr><td colSpan="2" className="p-6 text-center text-slate-400">No groups found.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+      )}
 
       {/* --- MODAL 1: CREATE USER --- */}
       {showUserModal && (
@@ -249,16 +295,16 @@ export default function ManageUsersPage() {
             
             <form onSubmit={handleCreateUser} className="p-6 space-y-4">
                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">First Name</label>
-                    <input required className="w-full p-2 border rounded-lg" 
-                      value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Last Name</label>
-                    <input required className="w-full p-2 border rounded-lg" 
-                      value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} />
-                  </div>
+                 <div>
+                   <label className="block text-sm font-bold text-slate-700 mb-1">First Name</label>
+                   <input required className="w-full p-2 border rounded-lg" 
+                     value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} />
+                 </div>
+                 <div>
+                   <label className="block text-sm font-bold text-slate-700 mb-1">Last Name</label>
+                   <input required className="w-full p-2 border rounded-lg" 
+                     value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} />
+                 </div>
                </div>
 
                <div>

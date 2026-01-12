@@ -4,7 +4,11 @@ const { OAuth2Client } = require('google-auth-library');
 const userModel = require('../models/userModel');
 const emailService = require('../services/emailService');
 const crypto = require('crypto');
-const db = require('../db');
+
+// ✅ FIX: Import as 'pool' and alias 'db' to it.
+// This prevents "pool is not defined" AND "db is not defined" errors.
+const pool = require('../db');
+const db = pool; 
 
 const saltRounds = 10;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -50,6 +54,7 @@ exports.register = async (req, res) => {
    try {
     await emailService.sendOTP(email, otp); 
   } catch (emailError) {
+    // ✅ Safe: uses 'db' which is now defined as 'pool'
     await db.query('DELETE FROM users WHERE id = $1', [user.id]); 
     return res.status(500).json({ message: 'Failed to send verification email. Please try again.' });
   }
@@ -154,10 +159,10 @@ exports.login = async (req, res) => {
     res.json({ 
       token, 
       user: { 
-        id: user.id,
+        id: user.id, 
         email: user.email, 
         firstName: user.first_name, 
-        lastName: user.last_name,
+        lastName: user.last_name, 
         role: user.role, 
         is_admin: user.is_admin,
         is_super_admin: user.is_super_admin || false,
@@ -215,7 +220,7 @@ exports.googleLogin = async (req, res) => {
         userId: user.id, 
         email: user.email, 
         firstName: user.first_name, 
-        lastName: user.last_name,
+        lastName: user.last_name, 
         role: user.role, 
         is_admin: user.is_admin,
         is_super_admin: user.is_super_admin || false,
@@ -228,10 +233,10 @@ exports.googleLogin = async (req, res) => {
     res.json({ 
       token: appToken, 
       user: { 
-        id: user.id,
+        id: user.id, 
         email: user.email, 
         firstName: user.first_name, 
-        lastName: user.last_name,
+        lastName: user.last_name, 
         role: user.role, 
         is_admin: user.is_admin,
         is_super_admin: user.is_super_admin || false,
@@ -347,7 +352,7 @@ exports.verifyUpdateProfile = async (req, res) => {
         userId: userId, 
         email: updatedUser.email, 
         firstName: updatedUser.first_name, 
-        lastName: updatedUser.last_name,
+        lastName: updatedUser.last_name, 
         role: updatedUser.role, 
         is_admin: updatedUser.is_admin,
         is_super_admin: updatedUser.is_super_admin || false,
@@ -496,10 +501,10 @@ exports.resetPassword = async (req, res) => {
   const { token, password } = req.body;
   
   if (!passwordRegex.test(password)) {
-     return res.status(400).json({ 
-       message: 'Password is too weak.',
-       details: 'Must be 8+ characters with uppercase, lowercase, number, and special chararacter.'
-     });
+      return res.status(400).json({ 
+        message: 'Password is too weak.',
+        details: 'Must be 8+ characters with uppercase, lowercase, number, and special chararacter.'
+      });
   }
 
   try {

@@ -52,12 +52,31 @@ exports.createAccount = async ({ firstName, lastName, email, passwordHash, role,
   return rows[0];
 };
 
+// --- GROUP MANAGEMENT ---
+
 exports.createGroup = async (name, adviserId) => {
+  // 1. Check for duplicates (Case Insensitive)
+  const check = await db.query('SELECT id FROM groups WHERE LOWER(name) = LOWER($1)', [name]);
+  if (check.rows.length > 0) {
+    throw new Error('Group name already exists');
+  }
+
+  // 2. Insert new group
   const { rows } = await db.query(
     'INSERT INTO groups (name, adviser_id) VALUES ($1, $2) RETURNING *',
     [name, adviserId]
   );
   return rows[0];
+};
+
+// ✅ ADDED THIS MISSING FUNCTION
+exports.deleteGroup = async (groupId) => {
+  // 1. Unassign users from this group first to avoid errors
+  await db.query('UPDATE users SET group_id = NULL WHERE group_id = $1', [groupId]);
+  
+  // 2. Delete the group
+  const result = await db.query('DELETE FROM groups WHERE id = $1 RETURNING *', [groupId]);
+  return result.rowCount > 0;
 };
 
 // --- EXISTING METHODS ---
