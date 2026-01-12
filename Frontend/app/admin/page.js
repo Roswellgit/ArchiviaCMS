@@ -51,13 +51,13 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
                       onClick={() => onAction(type, item.id, 'approve')} 
                       className="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-emerald-600 transition-colors shadow-sm"
                    >
-                     Approve
+                      Approve
                    </button>
                    <button 
                       onClick={() => onAction(type, item.id, 'reject')} 
                       className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
                    >
-                     Reject
+                      Reject
                    </button>
                 </td>
               </tr>
@@ -80,11 +80,14 @@ export default function AdminDashboardPage() {
   const [userArchives, setUserArchives] = useState([]);
 
   // --- FIXED ROLE CHECK LOGIC ---
-  const userRole = user?.role || '';
-  const isSuperAdmin = user?.is_super_admin || userRole === 'Super Admin';
-  const isAdmin = user?.is_admin || userRole === 'Admin' || isSuperAdmin;
-  const isAdvisor = userRole === 'Advisor' || userRole === 'Adviser';
+  // We use the database flags directly.
+  const isSuperAdmin = user?.is_super_admin;
+  const isAdmin = user?.is_admin || isSuperAdmin;
   
+  // ✅ FIX: Use the 'is_adviser' flag from the DB
+  const isAdvisor = user?.is_adviser; 
+  
+  // Privileged means they can see the Dashboard & Analytics
   const isPrivileged = isAdmin || isAdvisor;
 
   const fetchAllData = async () => {
@@ -92,7 +95,8 @@ export default function AdminDashboardPage() {
       const statsRes = await getAdminAnalytics();
       setStats(statsRes.data);
 
-      if (isPrivileged) {
+      // ✅ FIX: Only fetch sensitive request data if user is a FULL ADMIN
+      if (isAdmin) {
         const [uploadsRes, docArcRes, userArcRes] = await Promise.all([
             getPendingDocuments(),
             getDocArchiveRequests(),
@@ -140,7 +144,7 @@ export default function AdminDashboardPage() {
       {/* HEADER */}
       <div className="border-b border-gray-200 pb-6">
         <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-             {isPrivileged ? 'Admin Dashboard' : 'Analytics Hub'}
+              {isPrivileged ? 'Admin Dashboard' : 'Analytics Hub'}
         </h2>
         <p className="text-slate-500 mt-1">Welcome back, {user?.firstName}.</p>
       </div>
@@ -156,34 +160,44 @@ export default function AdminDashboardPage() {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Documents</p>
                 <h3 className="text-3xl font-extrabold text-slate-900 mt-2">{stats?.totalDocuments || 0}</h3>
             </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Tasks</p>
-                <h3 className="text-3xl font-extrabold text-orange-600 mt-2">
-                    {pendingUploads.length + docArchives.length + userArchives.length}
-                </h3>
-            </div>
+
+            {/* ✅ FIX: Only ADMINS see the "Pending Tasks" count */}
+            {isAdmin && (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Tasks</p>
+                    <h3 className="text-3xl font-extrabold text-orange-600 mt-2">
+                        {pendingUploads.length + docArchives.length + userArchives.length}
+                    </h3>
+                </div>
+            )}
             
-            {/* UPDATED: QUICK ACTIONS CARD (Now has 2 buttons) */}
+            {/* QUICK ACTIONS CARD */}
             <div className="bg-slate-900 p-5 rounded-2xl shadow-sm text-white flex flex-col justify-center gap-2">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Quick Actions</p>
                 
+                {/* Everyone (Admins + Advisors) can Manage Users */}
                 <Link href="/admin/users" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
                    <span className="font-bold text-sm">Manage Users</span>
                    <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
                 </Link>
                 
-                <div className="border-t border-white/10"></div>
-                
-                <Link href="/admin/documents" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
-                   <span className="font-bold text-sm">Manage Documents</span>
-                   <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
-                </Link>
+                {/* ✅ FIX: Only ADMINS can see "Manage Documents" link */}
+                {isAdmin && (
+                    <>
+                        <div className="border-t border-white/10"></div>
+                        <Link href="/admin/documents" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
+                           <span className="font-bold text-sm">Manage Documents</span>
+                           <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
+                        </Link>
+                    </>
+                )}
             </div>
         </div>
       )}
 
       {/* --- SECTION 2: SEPARATE PENDING MODULES --- */}
-      {isPrivileged && (
+      {/* ✅ FIX: Only show this entire section to ADMINS. Advisors don't approve docs. */}
+      {isAdmin && (
           <div className="space-y-6">
               <h3 className="text-2xl font-bold text-slate-800 border-l-4 border-indigo-600 pl-4">Pending Requests</h3>
               
@@ -199,7 +213,7 @@ export default function AdminDashboardPage() {
                         emptyMsg="No new documents to review."
                         colorClass="text-indigo-600"
                         icon="📄"
-                     />
+                      />
                   </div>
 
                   {/* 2. DOCUMENT ARCHIVE REQUESTS */}
@@ -228,9 +242,12 @@ export default function AdminDashboardPage() {
       )}
 
       {/* --- SECTION 3: ANALYTICS --- */}
+      {/* Visible to both Admins and Advisors */}
       <div className="mt-12 pt-12 border-t border-slate-200">
-         <h3 className="text-2xl font-bold text-slate-800 mb-8 border-l-4 border-blue-500 pl-4">Research Analytics</h3>
-         <AnalyticsDashboard stats={stats} role={user?.role} />
+          <h3 className="text-2xl font-bold text-slate-800 mb-8 border-l-4 border-blue-500 pl-4">Research Analytics</h3>
+          
+          <AnalyticsDashboard stats={stats} user={user} />
+          
       </div>
 
     </div>

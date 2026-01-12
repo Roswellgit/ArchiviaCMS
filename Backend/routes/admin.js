@@ -1,23 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
-const adminMiddleware = require('../middleware/adminMiddleware');
-const authMiddleware = require('../middleware/authMiddleware');
 
-// --- ACCOUNT & GROUP CREATION (RBAC) ---
-router.post('/create-account', authMiddleware, adminController.createAccount);
-router.post('/create-group', authMiddleware, adminController.createGroup);
+// ✅ FIX: Import the specific functions we created in authMiddleware
+const { verifyToken, isAdmin } = require('../middleware/authMiddleware');
 
-// --- ANALYTICS (MOVED HERE) ---
-// We place this ABOVE the adminMiddleware check. 
-// We only use 'authMiddleware' because we want Students to access this too.
-router.get('/analytics', authMiddleware, adminController.getDashboardStats);
+// --- ACCOUNT & GROUP CREATION ---
+// Updated to use 'verifyToken' instead of 'authMiddleware'
+// Note: We use 'isAdmin' here because we updated it to allow Advisors too.
+router.post('/create-account', verifyToken, isAdmin, adminController.createAccount);
+router.post('/groups', verifyToken, isAdmin, adminController.createGroup);
+
+// --- ANALYTICS ---
+// We allow Students (just verifyToken), logic inside controller handles the view
+router.get('/analytics', verifyToken, adminController.getDashboardStats);
+router.get('/analytics/insight', verifyToken, adminController.getAnalyticsAiInsight);
+
+// --- GROUPS (The line that caused the error) ---
+router.get('/groups', verifyToken, isAdmin, adminController.getAllGroups);
 
 // ------------------------------------------
 // PROTECT ALL ROUTES BELOW THIS LINE
 // ------------------------------------------
-// Anything below here requires the user to be an Admin or Advisor
-router.use(authMiddleware, adminMiddleware);
+// This applies the middleware to all routes defined after this point.
+router.use(verifyToken, isAdmin);
 
 
 // --- User Management ---
@@ -32,7 +38,7 @@ router.put('/user-archive-requests/:id/reject', adminController.rejectUserArchiv
 
 // --- Document Management ---
 
-// 1. Get Pending Queue (Must come BEFORE generic /:id routes)
+// 1. Get Pending Queue
 router.get('/documents/pending', adminController.getPendingDocuments);
 
 // 2. Approve/Reject
@@ -66,6 +72,7 @@ router.post('/settings/reset', adminController.resetSettings);
 router.get('/options', adminController.getFormOptions);
 router.post('/options', adminController.addFormOption); 
 router.delete('/options', adminController.deleteFormOption);
-router.post('/create-account', adminController.createAccount);
+
+// ❌ REMOVED DUPLICATE/UNPROTECTED create-account route that was here
 
 module.exports = router;

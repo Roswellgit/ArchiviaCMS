@@ -2,7 +2,8 @@ const jwt = require('jsonwebtoken');
 const db = require('../db'); 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const authMiddleware = async (req, res, next) => {
+// 1. Verify Token Function (Authentication)
+const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -14,7 +15,7 @@ const authMiddleware = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // FIX 1: Handle both 'id' and 'userId' (depending on how authController signed it)
+    // Handle both 'id' and 'userId'
     const userIdFromToken = decoded.id || decoded.userId;
 
     if (!userIdFromToken) {
@@ -36,7 +37,7 @@ const authMiddleware = async (req, res, next) => {
         return res.status(403).json({ message: 'Account is deactivated.' });
     }
 
-    // FIX 2: Ensure 'req.user.userId' exists for compatibility with your controllers
+    // Attach user to request so next middleware can see it
     req.user = user; 
     req.user.userId = user.id; 
 
@@ -47,4 +48,16 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-module.exports = authMiddleware;
+// 2. Admin/Advisor Permission Check (Authorization)
+const isAdmin = (req, res, next) => {
+  // Check if user exists (from verifyToken) AND has permission
+  // We allow Admins, Super Admins, AND Advisors
+  if (req.user && (req.user.is_admin || req.user.is_super_admin || req.user.is_adviser)) {
+    next(); 
+  } else {
+    return res.status(403).json({ message: 'Access denied. Privileged access required.' });
+  }
+};
+
+// 3. EXPORT BOTH FUNCTIONS
+module.exports = { verifyToken, isAdmin };

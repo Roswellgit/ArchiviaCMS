@@ -1,4 +1,3 @@
-
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -14,8 +13,13 @@ const adminMiddleware = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    if (!decoded.is_admin) {
-      return res.status(403).json({ message: 'Access denied. Admin role required.' });
+    // ❌ OLD: if (!decoded.is_admin) { ... }
+    
+    // ✅ NEW: Check for Admin OR Super Admin OR Advisor
+    const isPrivileged = decoded.is_admin || decoded.is_super_admin || decoded.is_adviser;
+
+    if (!isPrivileged) {
+      return res.status(403).json({ message: 'Access denied. Privileged access required.' });
     }
     
     req.user = decoded; 

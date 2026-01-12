@@ -66,7 +66,6 @@ exports.sendPasswordReset = async (email, token) => {
   }
 };
 
-// FIXED: Uses transporter directly and matches your styling
 exports.sendUpdateOtp = async (email, otp) => {
   const mailOptions = {
     from: 'archiviacap@gmail.com',
@@ -92,30 +91,38 @@ exports.sendUpdateOtp = async (email, otp) => {
   }
 };
 
-// --- ADD THIS NEW FUNCTION ---
+// --- UPDATED WELCOME EMAIL ---
 exports.sendWelcomeEmail = async (to, firstName, password) => {
+  // Uses your environment variable or defaults to localhost
   const loginUrl = process.env.FRONTEND_URL || 'http://localhost:3000/login';
   
   const mailOptions = {
-    from: '"ArchiviaCMS Admin" <no-reply@archiviacms.com>', // Update sender if needed
+    // FIX: Used your actual Gmail address to prevent blocking
+    from: '"Archivia Admin" <archiviacap@gmail.com>', 
     to: to,
-    subject: 'Welcome to ArchiviaCMS - Your Account Credentials',
+    subject: 'Welcome to Archivia - Account Created',
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-        <h2 style="color: #4F46E5; text-align: center;">Welcome to ArchiviaCMS!</h2>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;">
+        <h2 style="color: #4F46E5; text-align: center;">Welcome to Archivia!</h2>
         <p>Hello <strong>${firstName}</strong>,</p>
-        <p>Your account has been successfully created. You can now access the system using the credentials below:</p>
+        <p>Your account has been successfully created by an administrator. You can now access the system using the credentials below:</p>
         
         <div style="background-color: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #4F46E5;">
           <p style="margin: 5px 0; color: #374151;"><strong>Email:</strong> ${to}</p>
-          <p style="margin: 5px 0; color: #374151;"><strong>Password:</strong> <span style="font-family: monospace; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #d1d5db;">${password}</span></p>
+          <p style="margin: 5px 0; color: #374151;"><strong>Temporary Password:</strong> <span style="font-family: monospace; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #d1d5db; font-weight: bold;">${password}</span></p>
         </div>
 
-        <p style="color: #dc2626; font-size: 14px;"><em>Important: For security reasons, please log in and change your password immediately.</em></p>
-
-        <div style="text-align: center; margin-top: 30px;">
-          <a href="${loginUrl}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Login to Dashboard</a>
+        <div style="background-color: #fee2e2; color: #991b1b; padding: 15px; border-radius: 6px; margin-bottom: 20px; text-align: center;">
+            <strong>⚠️ SECURITY WARNING</strong><br/>
+            Please log in and <span style="text-decoration: underline;">change your password immediately</span>.
         </div>
+
+        <div style="text-align: center; margin-top: 10px;">
+          <a href="${loginUrl}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Login to Archivia</a>
+        </div>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;" />
+        <p style="font-size: 12px; color: #888; text-align: center;">If you have any issues logging in, please contact your System Administrator.</p>
       </div>
     `,
   };
@@ -125,6 +132,5 @@ exports.sendWelcomeEmail = async (to, firstName, password) => {
     console.log(`[Email Service] Welcome email sent to ${to}`);
   } catch (error) {
     console.error('[Email Service] Error sending welcome email:', error);
-    // We log but don't throw, so the user creation doesn't fail just because email failed
   }
 };

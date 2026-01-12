@@ -48,7 +48,6 @@ async function generateMetadata(fileBuffer) {
             parts: [
               { text: prompt },
               {
-                
                 inlineData: {
                   mimeType: "application/pdf",
                   data: fileBuffer.toString("base64")
@@ -92,14 +91,11 @@ async function generateMetadata(fileBuffer) {
 
 exports.analyzeDocument = async (fileBuffer) => {
   try {
-    
     const data = await pdfParse(fileBuffer); 
     const rawText = data.text; 
     const numPages = data.numpages;
 
-    
     if (!numPages || numPages === 0) {
-        
         return {
             title: "Invalid Document",
             ai_keywords: "[]",
@@ -114,7 +110,6 @@ exports.analyzeDocument = async (fileBuffer) => {
 
     console.log(`[AI Service] Text parsed (${rawText.length} chars). Executing Hybrid Analysis...`);
 
-    
     const metadata = await generateMetadata(fileBuffer);
     
     return {
@@ -155,5 +150,76 @@ exports.formatCitation = async (docData, style) => {
   } catch (err) {
     console.error("Citation Error:", err);
     throw new Error("Failed to generate citation");
+  }
+};
+
+exports.generateGraphDescription = async (graphData) => {
+  const prompt = `
+    You are a data analyst for ArchiviaCMS. 
+    Analyze the following dataset representing system activity (e.g., uploads, active users over time).
+    
+    Data:
+    ${JSON.stringify(graphData)}
+
+    Provide a concise, insight-driven description (max 50 words). 
+    Focus on:
+    1. Identifying the peak month/period.
+    2. Noting any significant trends (upward/downward).
+    3. Suggesting a potential cause or action (e.g., "Increase storage during peak months").
+    
+    Output: Plain text only.
+  `;
+
+  const maxRetries = 3;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }]
+      });
+      
+      return response.text ? response.text.trim() : "No analysis generated.";
+    } catch (err) {
+      lastError = err;
+      if (err.message && (err.message.includes("overloaded") || err.status === 503)) {
+        await delay(2000 * attempt);
+        continue;
+      }
+      console.error("[AI Service] Graph analysis failed:", err.message);
+      break; 
+    }
+  }
+  return "Unable to generate graph analysis at this time.";
+};
+
+// --- FIX: Corrected this function to use ai.models.generateContent ---
+exports.generateDashboardInsight = async (data) => {
+  try {
+    const prompt = `
+      You are a Data Analyst for a research archive. Analyze the following system statistics and write a short, professional executive summary (max 10 sentences and 100 words) suitable for a printed report.
+      
+      Data:
+      - Total Documents: ${data.totalDocuments}
+      - Total Users: ${data.totalUsers}
+      - Top Search Terms: ${data.topSearches.map(s => s.term).join(', ')}
+      - Recent Upload Activity (Month: Count): ${data.uploadTrend.map(t => `${t.month}: ${t.count}`).join(', ')}
+      - Top Research Topics: ${data.topKeywords.map(k => k.term).join(', ')}
+
+      Focus on the trends and most active research areas. Do not use markdown or bullet points, just a paragraph.
+    `;
+
+    // Updated Syntax for @google/genai
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+    });
+
+    return response.text ? response.text.trim() : "Analytics data is available for review in the charts below.";
+
+  } catch (error) {
+    console.error("AI Insight Error:", error);
+    return "Analytics data is available for review in the charts below.";
   }
 };

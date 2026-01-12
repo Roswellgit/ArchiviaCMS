@@ -8,6 +8,7 @@ const fileUploadService = require('../services/fileUploadService');
 const s3Service = require('../services/s3Service');
 const optionModel = require('../models/optionModel');
 const emailService = require('../services/emailService');
+const aiService = require('../services/aiService');
 
 const pool = require('../db');
 
@@ -16,94 +17,96 @@ const pool = require('../db');
 // --- HIERARCHICAL CREATION (Fixed for Pre-Verification) ---
 
 exports.createAccount = async (req, res) => {
-  const client = await pool.connect(); // Use transaction for safety
+  const client = await pool.connect(); 
   try {
-    const { firstName, lastName, email, password, role, studentProfile } = req.body;
+    // 1. UPDATED: Accept 'groupId' from the request
+    const { firstName, lastName, email, password, role, accessLevel, schoolId, studentProfile, groupId } = req.body;
     const requester = req.user; 
 
-    // 1. Basic Validation
-    if (!firstName || !lastName || !email || !password || !role) {
-      return res.status(400).json({ message: 'All fields are required' });
+    if (!firstName || !lastName || !email || !password || !role || !accessLevel || !schoolId) {
+      return res.status(400).json({ message: 'All fields (including ID) are required' });
     }
 
-    // 2. Permission Logic (Preserved from your code)
-    // Students cannot create accounts
+    // --- 2. HIERARCHY PERMISSION LOGIC ---
+    // Level 1: Standard Users -> Cannot create accounts
     if (!requester.is_admin && !requester.is_super_admin && !requester.is_adviser) {
         return res.status(403).json({ message: 'Permission denied.' });
     }
-    // Advisers: Can ONLY create Students
+    
+    // Level 2: Advisors -> Can ONLY create Students
     if (requester.is_adviser && !requester.is_admin && !requester.is_super_admin) {
-        if (role !== 'Student') { // Note: Capitalized 'Student' to match your DB options
+        if (accessLevel !== 'Student') { 
             return res.status(403).json({ message: 'Advisers can only create Student accounts.' });
         }
     }
-    // Admins: Cannot create other Admins/Super Admins
+    
+    // Level 3: Admins -> Can create Admins, Advisors, Students (NOT Super Admins)
     if (requester.is_admin && !requester.is_super_admin) {
-        const restrictedRoles = ['Admin', 'Super Admin'];
-        if (restrictedRoles.includes(role)) {
-            return res.status(403).json({ message: 'Admins cannot create other Admin-level accounts.' });
+        if (accessLevel === 'Super Admin') {
+            return res.status(403).json({ message: 'Admins cannot create Super Admin accounts.' });
         }
     }
 
-    await client.query('BEGIN'); // Start Transaction
+    await client.query('BEGIN'); 
 
-    // 3. Check for Existing Email
+    // 3. Check Email
     const emailCheck = await client.query('SELECT id FROM users WHERE email = $1', [email]);
     if (emailCheck.rows.length > 0) {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: 'User already exists with this email.' });
     }
 
-    // 4. Hash Password
+    // 4. Check School ID
+    const idCheck = await client.query('SELECT id FROM users WHERE school_id = $1', [schoolId]);
+    if (idCheck.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: `The ID '${schoolId}' is already in use by another user.` });
+    }
+
+    // 5. Hash Password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 5. Determine Boolean Flags based on Role String
-    // This maintains backward compatibility with your is_admin/is_super_admin columns
-    const isSuperAdmin = role === 'Super Admin';
-    const isAdmin = role === 'Admin' || isSuperAdmin;
-    const isAdviser = role === 'Advisor' || role === 'Teacher'; // Adjust based on your preferences
-
-    // 6. Insert User (PRE-VERIFIED: is_active=true, is_verified=true)
+    // --- 6. DETERMINE DB FLAGS ---
+    const isSuperAdmin = accessLevel === 'Super Admin';
+    const isAdmin = accessLevel === 'Admin' || isSuperAdmin;
+    const isAdviser = accessLevel === 'Advisor';
+    
+    // 7. Insert User (UPDATED WITH group_id)
     const insertUserQuery = `
       INSERT INTO users (
         first_name, last_name, email, password_hash, 
         role, is_admin, is_super_admin, is_adviser, 
-        is_active, is_verified
+        is_active, is_verified, school_id, group_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, true) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, true, $9, $10) 
       RETURNING id, email, role
     `;
     
+    // Use groupId if provided, otherwise null
+    const finalGroupId = (groupId && groupId !== '') ? groupId : null;
+
     const userResult = await client.query(insertUserQuery, [
-      firstName, 
-      lastName, 
-      email, 
-      hashedPassword, 
-      role, 
-      isAdmin, 
-      isSuperAdmin, 
-      isAdviser
+      firstName, lastName, email, hashedPassword, role, 
+      isAdmin, isSuperAdmin, isAdviser, schoolId, finalGroupId
     ]);
 
     const newUserId = userResult.rows[0].id;
 
-    // 7. Handle Student Profile (if applicable)
-    // Only insert if role is Student AND we have profile data
-    if (role === 'Student' && studentProfile) {
-      const { yearLevel, strand } = studentProfile;
-      // Ensure we treat 'undefined' strand as NULL or empty string
+    // 8. Handle Student Profile
+    if (accessLevel === 'Student' && studentProfile) {
+      const { yearLevel, strand, section } = studentProfile;
       await client.query(
-        `INSERT INTO student_profiles (user_id, year_level, strand) VALUES ($1, $2, $3)`,
-        [newUserId, yearLevel, strand || '']
+        `INSERT INTO student_profiles (user_id, year_level, strand, section) VALUES ($1, $2, $3, $4)`,
+        [newUserId, yearLevel, strand || '', section || '']
       );
     }
 
-    await client.query('COMMIT'); // Commit Transaction
-
+    await client.query('COMMIT'); 
+    
     emailService.sendWelcomeEmail(email, firstName, password);
 
     res.status(201).json({
-      message: `${role} created successfully.`,
+      message: `${role} (${accessLevel}) created successfully.`,
       user: userResult.rows[0]
     });
 
@@ -118,7 +121,7 @@ exports.createAccount = async (req, res) => {
 
 exports.createGroup = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, adviserId } = req.body; // Accept adviserId for Admins
     const requester = req.user;
 
     if (!requester.is_adviser && !requester.is_admin && !requester.is_super_admin) {
@@ -129,7 +132,18 @@ exports.createGroup = async (req, res) => {
       return res.status(400).json({ message: 'Group name is required.' });
     }
 
-    const newGroup = await userModel.createGroup(name, requester.id);
+    let finalAdviserId;
+
+    // LOGIC: If Advisor, they lead the group. If Admin, they assign someone.
+    if (requester.is_adviser) {
+        finalAdviserId = requester.id;
+    } else {
+        // Admin is creating it
+        finalAdviserId = adviserId || null; 
+    }
+
+    // Pass the calculated finalAdviserId instead of just requester.id
+    const newGroup = await userModel.createGroup(name, finalAdviserId);
 
     res.status(201).json({ message: 'Group created successfully', group: newGroup });
 
@@ -142,10 +156,26 @@ exports.createGroup = async (req, res) => {
 // ... (KEEP ALL EXISTING METHODS BELOW EXACTLY AS THEY WERE) ...
 exports.getDashboardStats = async (req, res) => {
   try {
+    // 1. Fetch Basic Data (Existing logic)
     const users = await userModel.findAll();
-    const documents = await documentModel.findAll(true); 
-    const topSearches = await analyticsModel.getTopSearches(5); 
+    const documents = await documentModel.findAll(true);
 
+    // 2. Fetch Graph Data (NEW: Needed for Graphs & Printable Report)
+    const [
+      topSearches,
+      uploadTrend,
+      topKeywords,
+      documentsByStrand,
+      documentsByYear
+    ] = await Promise.all([
+      analyticsModel.getTopSearches(5),
+      analyticsModel.getUploadTrends(),        
+      analyticsModel.getKeywordTrends(),       
+      analyticsModel.getDocumentsByStrand(),
+      analyticsModel.getDocumentsByYearLevel()
+    ]);
+
+    // 3. Calculate Scalars (Existing logic)
     const totalUsers = users.length;
     const activeUsers = users.filter(u => u.is_active).length;
     const totalDocuments = documents.length;
@@ -157,7 +187,22 @@ exports.getDashboardStats = async (req, res) => {
 
     const pendingRequests = deletionRequests + archiveRequests + userRequests + pendingDocs;
 
-    res.json({ totalUsers, activeUsers, totalDocuments, pendingRequests, topSearches });
+    // 4. Send Combined Response
+    res.json({
+      // Basic Stats
+      totalUsers,
+      activeUsers,
+      totalDocuments,
+      pendingRequests,
+      
+      // Graph Data
+      topSearches,
+      uploadTrend,
+      topKeywords,
+      documentsByStrand,
+      documentsByYear
+    });
+
   } catch (err) {
     console.error("Analytics Error:", err.message);
     res.status(500).send('Server error fetching stats');
@@ -620,5 +665,49 @@ exports.deleteFormOption = async (req, res) => {
     res.json({ message: 'Option removed' });
   } catch (err) {
     res.status(500).json({ message: 'Error deleting option' });
+  }
+};
+
+exports.getAnalyticsAiInsight = async (req, res) => {
+  try {
+    // 1. Gather the data (same as dashboard)
+    const [
+      users, documents, topSearches, uploadTrend, topKeywords
+    ] = await Promise.all([
+      userModel.findAll(),
+      documentModel.findAll(true),
+      analyticsModel.getTopSearches(5),
+      analyticsModel.getUploadTrends(),
+      analyticsModel.getKeywordTrends()
+    ]);
+
+    // 2. Prepare payload for AI
+    const analysisData = {
+      totalUsers: users.length,
+      totalDocuments: documents.length,
+      topSearches,
+      uploadTrend,
+      topKeywords
+    };
+
+    // 3. Ask AI for the summary
+    const insightText = await aiService.generateDashboardInsight(analysisData);
+
+    res.json({ insight: insightText });
+
+  } catch (err) {
+    console.error('AI Insight Controller Error:', err);
+    res.status(500).json({ insight: "Automated insight could not be generated at this time." });
+  }
+};
+
+exports.getAllGroups = async (req, res) => {
+  try {
+    // Basic query to get all groups
+    const result = await pool.query('SELECT * FROM groups ORDER BY name ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error fetching groups' });
   }
 };

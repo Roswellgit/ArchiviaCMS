@@ -95,3 +95,23 @@ input::-ms-clear {
 main {
   transition: opacity 0.3s ease-in-out;
 }
+
+@media print {
+  /* Force background graphics to print */
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide sidebar and navigation */
+  nav, aside, header, footer, .sidebar {
+    display: none !important;
+  }
+
+  /* Reset layout for paper */
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+}

@@ -28,16 +28,27 @@ export function AuthProvider({ children }) {
         if (decodedUser.exp * 1000 < Date.now()) {
           localStorage.removeItem('token');
         } else {
+          // --- ROBUST USER MAPPING ---
+          // We check the Boolean flag OR the text Role to be 100% sure
+          const isAdviserRaw = decodedUser.is_adviser;
+          const roleRaw = decodedUser.role ? decodedUser.role.toLowerCase() : '';
+          
+          // Force is_adviser to TRUE if the role says "adviser"
+          const finalIsAdviser = isAdviserRaw || roleRaw === 'adviser' || roleRaw === 'advisor';
+
           setUser({ 
+              id: decodedUser.userId || decodedUser.id, 
               firstName: decodedUser.firstName, 
               lastName: decodedUser.lastName, 
               email: decodedUser.email,
+              role: decodedUser.role,
               is_admin: decodedUser.is_admin,
-              // ADDED: Ensure this field is restored from the token
-              is_super_admin: decodedUser.is_super_admin 
+              is_super_admin: decodedUser.is_super_admin,
+              
+              // ✅ THE FIX: Use the calculated safe value
+              is_adviser: finalIsAdviser
           });
           setToken(storedToken);
-         
           setAuthToken(storedToken);
         }
       } catch (error) {

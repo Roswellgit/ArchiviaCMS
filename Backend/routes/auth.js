@@ -1,21 +1,26 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const authMiddleware = require('../middleware/authMiddleware'); 
 
+// ✅ FIX: Destructure 'verifyToken' from the middleware
+const { verifyToken } = require('../middleware/authMiddleware'); 
+
+// Public Routes
 router.post('/register', authController.register);
 router.post('/verify', authController.verifyEmail);
 router.post('/login', authController.login);
 router.post('/google', authController.googleLogin);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
-router.get('/profile', authMiddleware, authController.getProfile);
 
-router.put('/update-profile/initiate', authMiddleware, authController.initiateUpdateProfile);
-router.post('/update-profile/verify', authMiddleware, authController.verifyUpdateProfile);
+// Protected Routes (Use verifyToken instead of authMiddleware)
+router.get('/profile', verifyToken, authController.getProfile);
 
-router.post('/request-password-otp', authMiddleware, authController.requestPasswordChangeOTP);
+router.put('/update-profile/initiate', verifyToken, authController.initiateUpdateProfile);
+router.post('/update-profile/verify', verifyToken, authController.verifyUpdateProfile);
 
-router.put('/change-password', authMiddleware, authController.changePassword);
+router.post('/request-password-otp', verifyToken, authController.requestPasswordChangeOTP);
+
+router.put('/change-password', verifyToken, authController.changePassword);
 
 module.exports = router;

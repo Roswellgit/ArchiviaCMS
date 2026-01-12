@@ -1,12 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const documentController = require('../controllers/documentController');
-const authMiddleware = require('../middleware/authMiddleware');
-const adminMiddleware = require('../middleware/adminMiddleware');
+
+// ✅ FIX: Import specific functions (verifyToken, isAdmin)
+const { verifyToken, isAdmin } = require('../middleware/authMiddleware');
+
 const optionalAuthMiddleware = require('../middleware/optionalAuthMiddleware'); 
 
 router.get('/debug-schema', async (req, res) => {
-  const db = require('../db'); // Adjust path to your db.js
+  const db = require('../db'); 
   try {
     const result = await db.query(`
       SELECT column_name 
@@ -22,30 +24,28 @@ router.get('/debug-schema', async (req, res) => {
   }
 });
 
+// Public / Optional Auth Routes
 router.get('/', optionalAuthMiddleware, documentController.getAllDocuments);
 router.get('/search', optionalAuthMiddleware, documentController.searchDocuments);
 router.post('/filter', optionalAuthMiddleware, documentController.filterDocuments);
 
-
 router.get('/popular', documentController.getPopularSearches);
 router.get('/filters', documentController.getFilters);
 
-
 router.post('/citation', optionalAuthMiddleware, documentController.generateCitation);
 
+// ✅ FIX: Use 'verifyToken' instead of 'authMiddleware'
+router.get('/my-uploads', verifyToken, documentController.getUserUploads);
+router.post('/upload', verifyToken, documentController.uploadDocument);
+router.put('/:id', verifyToken, documentController.updateDocument);
+router.delete('/:id', verifyToken, documentController.deleteDocument);
+router.post('/:id/request-delete', verifyToken, documentController.requestDeleteDocument);
 
-router.get('/my-uploads', authMiddleware, documentController.getUserUploads);
-router.post('/upload', authMiddleware, documentController.uploadDocument);
-router.put('/:id', authMiddleware, documentController.updateDocument);
-router.delete('/:id', authMiddleware, documentController.deleteDocument);
-router.post('/:id/request-delete', authMiddleware, documentController.requestDeleteDocument);
+// Console logs for debugging (Optional, you can remove these)
+console.log('Verify Token:', verifyToken);
+console.log('Is Admin:', isAdmin);
 
-console.log('Auth Middleware:', authMiddleware);
-console.log('Admin Middleware:', adminMiddleware);
-console.log('Approve Controller:', documentController.approveDocument);
-
-
-
-router.put('/approve/:id', authMiddleware, adminMiddleware, documentController.approveDocument);
+// ✅ FIX: Use 'verifyToken' and 'isAdmin' for approval
+router.put('/approve/:id', verifyToken, isAdmin, documentController.approveDocument);
 
 module.exports = router;

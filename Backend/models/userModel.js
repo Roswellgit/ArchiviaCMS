@@ -1,17 +1,15 @@
 const db = require('../db');
 
-// Updated to fetch 'role'
+// --- UPDATED: Added 'is_adviser' to the select list ---
 exports.findByEmail = async (email) => {
   const { rows } = await db.query(
-    // Make sure to add 'job_title' (or whatever your column name is) to this list!
-    'SELECT id, first_name, role, last_name, email, password_hash, is_admin, is_super_admin, is_verified, otp_code, otp_expires, is_active, job_title FROM users WHERE email = $1',
+    'SELECT id, first_name, role, last_name, email, password_hash, is_admin, is_super_admin, is_adviser, is_verified, otp_code, otp_expires, is_active, job_title FROM users WHERE email = $1',
     [email]
   );
   return rows[0];
 };
 
 // --- UPDATED ACCOUNT CREATION ---
-
 exports.createAccount = async ({ firstName, lastName, email, passwordHash, role, groupId }) => {
   let isAdmin = false;
   let isSuperAdmin = false;
@@ -20,7 +18,7 @@ exports.createAccount = async ({ firstName, lastName, email, passwordHash, role,
   // Determine flags based on role
   switch (role) {
     case 'superadmin':
-    case 'principal': // <--- MOVED 'principal' here if they are the "Owner"
+    case 'principal': 
       isSuperAdmin = true;
       isAdmin = true;
       break;
@@ -41,15 +39,14 @@ exports.createAccount = async ({ firstName, lastName, email, passwordHash, role,
       break;
   }
 
-  // Ensure groupId is null if not provided (e.g. for admins)
+  // Ensure groupId is null if not provided
   const groupValue = groupId || null;
 
-  // Added group_id to the INSERT statement
   const { rows } = await db.query(
     `INSERT INTO users 
       (first_name, last_name, email, password_hash, role, is_admin, is_super_admin, is_adviser, is_verified, is_active, group_id) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, TRUE, $9) 
-     RETURNING id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser`,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, TRUE, $9) 
+      RETURNING id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser`,
     [firstName, lastName, email, passwordHash, role, isAdmin, isSuperAdmin, isAdviser, groupValue]
   );
   return rows[0];
@@ -63,13 +60,13 @@ exports.createGroup = async (name, adviserId) => {
   return rows[0];
 };
 
-// --- EXISTING METHODS (Updated to handle 'role' column default) ---
+// --- EXISTING METHODS ---
 
 exports.createWithOTP = async ({ firstName, lastName, email, passwordHash, otp, otpExpires }) => {
   const { rows } = await db.query(
     `INSERT INTO users (first_name, last_name, email, password_hash, otp_code, otp_expires, is_verified, is_active, role) 
-     VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, 'student') 
-     RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
+      VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, 'student') 
+      RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
     [firstName, lastName, email, passwordHash, otp, otpExpires]
   );
   return rows[0];
@@ -78,8 +75,8 @@ exports.createWithOTP = async ({ firstName, lastName, email, passwordHash, otp, 
 exports.create = async ({ firstName, lastName, email, passwordHash }) => {
   const { rows } = await db.query(
     `INSERT INTO users (first_name, last_name, email, password_hash, is_active, role) 
-     VALUES ($1, $2, $3, $4, TRUE, 'student') 
-     RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
+      VALUES ($1, $2, $3, $4, TRUE, 'student') 
+      RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
     [firstName, lastName, email, passwordHash]
   );
   return rows[0];
@@ -92,14 +89,12 @@ exports.markVerified = async (userId) => {
   );
 };
 
-// Updated to fetch 'role'
 exports.findAll = async () => {
   const { rows } = await db.query('SELECT id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser, is_verified, is_active, archive_requested FROM users ORDER BY last_name');
   return rows;
 };
 
 exports.updateAdminStatus = async (userId, isAdminBoolean) => {
-  // If making admin, we might default role to 'admin' if it was 'student'
   const { rows } = await db.query(
     'UPDATE users SET is_admin = $1 WHERE id = $2 RETURNING id, first_name, last_name, email, is_admin',
     [isAdminBoolean, userId]
@@ -107,23 +102,25 @@ exports.updateAdminStatus = async (userId, isAdminBoolean) => {
   return rows[0];
 };
 
+// --- UPDATED: Added is_adviser to RETURNING ---
 exports.updateUserDetails = async (userId, { first_name, last_name, email, is_admin }) => {
   const { rows } = await db.query(
     `UPDATE users 
-     SET first_name = $1, last_name = $2, email = $3, is_admin = $4 
-     WHERE id = $5 
-     RETURNING id, first_name, last_name, email, role, is_admin, is_active`,
+      SET first_name = $1, last_name = $2, email = $3, is_admin = $4 
+      WHERE id = $5 
+      RETURNING id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser, is_active`,
     [first_name, last_name, email, is_admin, userId]
   );
   return rows[0];
 };
 
+// --- UPDATED: Added is_adviser to RETURNING ---
 exports.updateProfile = async (userId, { firstName, lastName, email }) => {
   const { rows } = await db.query(
     `UPDATE users 
-     SET first_name = $1, last_name = $2, email = $3
-     WHERE id = $4 
-     RETURNING id, first_name, last_name, email, role, is_admin`,
+      SET first_name = $1, last_name = $2, email = $3
+      WHERE id = $4 
+      RETURNING id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser`,
     [firstName, lastName, email, userId]
   );
   return rows[0];
@@ -176,9 +173,9 @@ exports.revokeArchiveRequest = async (id) => {
 exports.createGoogleUser = async ({ email, firstName, lastName, passwordHash }) => {
   const { rows } = await db.query(
     `INSERT INTO users 
-     (first_name, last_name, email, password_hash, is_verified, is_active, role) 
-     VALUES ($1, $2, $3, $4, TRUE, TRUE, 'student') 
-     RETURNING id, first_name, last_name, email, is_admin`,
+      (first_name, last_name, email, password_hash, is_verified, is_active, role) 
+      VALUES ($1, $2, $3, $4, TRUE, TRUE, 'student') 
+      RETURNING id, first_name, last_name, email, is_admin`,
     [firstName, lastName, email, passwordHash] 
   );
   return rows[0];
@@ -206,10 +203,10 @@ exports.updatePassword = async (userId, passwordHash) => {
   );
 };
 
-// Updated to fetch 'role'
+// --- UPDATED: Added 'is_adviser' to the select list ---
 exports.findById = async (id) => {
   const { rows } = await db.query(
-    'SELECT id, first_name, last_name, email, role, is_admin, is_super_admin, is_active FROM users WHERE id = $1', 
+    'SELECT id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser, is_active FROM users WHERE id = $1', 
     [id]
   );
   return rows[0];
@@ -269,11 +266,10 @@ exports.applyUserUpdate = async (userId, data) => {
   await db.query(query, values);
 };
 
-// Add this helper function to check for existing students in a group
 exports.checkGroupHasStudent = async (groupId) => {
   const { rows } = await db.query(
     `SELECT id FROM users WHERE group_id = $1 AND role = 'student'`, 
     [groupId]
   );
-  return rows.length > 0; // Returns true if a student exists
+  return rows.length > 0;
 };

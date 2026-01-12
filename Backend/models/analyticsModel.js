@@ -40,12 +40,13 @@ exports.getTopSearches = async (limit = 5) => {
 // Groups approved documents based on the Uploader's Strand
 exports.getDocumentsByStrand = async () => {
   try {
+    // FIX: Joined 'student_profiles' (sp) to find 'strand'
     const query = `
-      SELECT u.strand, COUNT(d.id) as count
+      SELECT sp.strand, COUNT(d.id) as count
       FROM documents d
-      JOIN users u ON d.user_id = u.id
-      WHERE d.status = 'approved' AND u.strand IS NOT NULL
-      GROUP BY u.strand
+      JOIN student_profiles sp ON d.user_id = sp.user_id
+      WHERE d.status = 'approved' AND sp.strand IS NOT NULL
+      GROUP BY sp.strand
       ORDER BY count DESC
     `;
     const { rows } = await db.query(query);
@@ -59,13 +60,14 @@ exports.getDocumentsByStrand = async () => {
 // Groups approved documents based on the Uploader's Year Level
 exports.getDocumentsByYearLevel = async () => {
   try {
+    // FIX: Joined 'student_profiles' (sp) to find 'year_level'
     const query = `
-      SELECT u.year_level, COUNT(d.id) as count
+      SELECT sp.year_level, COUNT(d.id) as count
       FROM documents d
-      JOIN users u ON d.user_id = u.id
-      WHERE d.status = 'approved' AND u.year_level IS NOT NULL
-      GROUP BY u.year_level
-      ORDER BY u.year_level ASC
+      JOIN student_profiles sp ON d.user_id = sp.user_id
+      WHERE d.status = 'approved' AND sp.year_level IS NOT NULL
+      GROUP BY sp.year_level
+      ORDER BY sp.year_level ASC
     `;
     const { rows } = await db.query(query);
     return rows;
@@ -77,24 +79,22 @@ exports.getDocumentsByYearLevel = async () => {
 
 // --- 3. NEW: ANALYTICS BY DOCUMENT ATTRIBUTES ---
 
-// Groups approved documents by Subject (Requires 'subject' column in documents table)
+// Groups approved documents by Subject
 exports.getDocumentsBySubject = async () => {
   try {
-    // Note: Ensure your 'documents' table has a 'subject' column. 
-    // If not, run: ALTER TABLE documents ADD COLUMN subject VARCHAR(255);
+    // Note: Ensure your 'documents' table has a 'subject' column.
     const query = `
       SELECT subject, COUNT(*) as count
       FROM documents
       WHERE status = 'approved' AND subject IS NOT NULL
-      GROUP BY ai_keywords
+      GROUP BY subject
       ORDER BY count DESC
       LIMIT 10
     `;
     const { rows } = await db.query(query);
     return rows;
   } catch (err) {
-    // Fail silently or return empty if column doesn't exist yet
-    console.error("Error getting documents by subject (Check if column exists):", err.message);
+    console.error("Error getting documents by subject:", err.message);
     return [];
   }
 };
@@ -102,12 +102,14 @@ exports.getDocumentsBySubject = async () => {
 // Bonus: Uploads over the last 6 months
 exports.getUploadTrends = async () => {
   try {
+    // FIX: Swapped to 'created_at' to match your schema
     const query = `
-      SELECT TO_CHAR(upload_date, 'Mon') as month, COUNT(*) as count
+      SELECT TO_CHAR(created_at, 'Mon') as month, COUNT(*) as count
       FROM documents
-      WHERE upload_date > CURRENT_DATE - INTERVAL '6 months'
-      GROUP BY TO_CHAR(upload_date, 'Mon'), DATE_TRUNC('month', upload_date)
-      ORDER BY DATE_TRUNC('month', upload_date)
+      WHERE status = 'approved' 
+      AND created_at > CURRENT_DATE - INTERVAL '6 months'
+      GROUP BY TO_CHAR(created_at, 'Mon'), DATE_TRUNC('month', created_at)
+      ORDER BY DATE_TRUNC('month', created_at) ASC
     `;
     const { rows } = await db.query(query);
     return rows;
@@ -118,18 +120,23 @@ exports.getUploadTrends = async () => {
 };
 
 exports.getMostViewedDocuments = async () => {
-  const { rows } = await db.query(
-    `SELECT title, views, year_level 
-     FROM documents 
-     WHERE status = 'approved' 
-     ORDER BY views DESC 
-     LIMIT 5`
-  );
-  return rows;
+  try {
+    // FIX: Removed 'year_level' from SELECT because documents table doesn't have it
+    const { rows } = await db.query(
+        `SELECT title, views 
+         FROM documents 
+         WHERE status = 'approved' 
+         ORDER BY views DESC 
+         LIMIT 5`
+    );
+    return rows;
+  } catch (err) {
+    console.error("Error getting most viewed:", err.message);
+    return [];
+  }
 };
 
 exports.getFailedSearches = async () => {
-  // Returns terms where the system returned 0 documents
   const { rows } = await db.query(
     `SELECT term, count FROM search_analytics WHERE avg_results_found = 0 ORDER BY count DESC LIMIT 10`
   );
@@ -147,15 +154,20 @@ exports.getActivityHeatmap = async () => {
 };
 
 exports.getKeywordTrends = async () => {
-  // This is a bit complex in SQL, essentially splitting strings by comma and counting
-  // Simplest version if keywords are a text string "tag1, tag2":
-  const { rows } = await db.query(`
-    SELECT unnest(string_to_array(ai_keywords, ',')) as tag, COUNT(*) 
-    FROM documents 
-    WHERE status = 'approved' 
-    GROUP BY tag 
-    ORDER BY count DESC 
-    LIMIT 15
-  `);
-  return rows;
+  try {
+    // FIX: Using jsonb_array_elements_text because ai_keywords is JSONB
+    const query = `
+      SELECT term, COUNT(*) as count
+      FROM documents, jsonb_array_elements_text(ai_keywords) as term
+      WHERE status = 'approved'
+      GROUP BY term
+      ORDER BY count DESC
+      LIMIT 15
+    `;
+    const { rows } = await db.query(query);
+    return rows;
+  } catch (err) {
+    console.error("Error getting keyword trends:", err.message);
+    return [];
+  }
 };

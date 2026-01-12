@@ -142,8 +142,10 @@ exports.login = async (req, res) => {
         email: user.email, 
         firstName: user.first_name, 
         lastName: user.last_name,
+        role: user.role, 
         is_admin: user.is_admin,
-        is_super_admin: user.is_super_admin || false
+        is_super_admin: user.is_super_admin || false,
+        is_adviser: user.is_adviser // ✅ ADDED
       },
       JWT_SECRET,
       { expiresIn: '1h' }
@@ -156,8 +158,10 @@ exports.login = async (req, res) => {
         email: user.email, 
         firstName: user.first_name, 
         lastName: user.last_name,
+        role: user.role, 
         is_admin: user.is_admin,
-        is_super_admin: user.is_super_admin || false
+        is_super_admin: user.is_super_admin || false,
+        is_adviser: user.is_adviser // ✅ ADDED
       } 
     });
 
@@ -212,8 +216,10 @@ exports.googleLogin = async (req, res) => {
         email: user.email, 
         firstName: user.first_name, 
         lastName: user.last_name,
+        role: user.role, 
         is_admin: user.is_admin,
-        is_super_admin: user.is_super_admin || false
+        is_super_admin: user.is_super_admin || false,
+        is_adviser: user.is_adviser // ✅ ADDED
       },
       JWT_SECRET,
       { expiresIn: '1h' }
@@ -226,8 +232,10 @@ exports.googleLogin = async (req, res) => {
         email: user.email, 
         firstName: user.first_name, 
         lastName: user.last_name,
+        role: user.role, 
         is_admin: user.is_admin,
-        is_super_admin: user.is_super_admin || false
+        is_super_admin: user.is_super_admin || false,
+        is_adviser: user.is_adviser // ✅ ADDED
       } 
     });
 
@@ -250,8 +258,10 @@ exports.getProfile = async (req, res) => {
       email: user.email,
       firstName: user.first_name,
       lastName: user.last_name,
+      role: user.role, 
       is_admin: user.is_admin,
-      is_super_admin: user.is_super_admin
+      is_super_admin: user.is_super_admin,
+      is_adviser: user.is_adviser // ✅ ADDED
     });
   } catch (err) {
     console.error(err.message);
@@ -338,8 +348,10 @@ exports.verifyUpdateProfile = async (req, res) => {
         email: updatedUser.email, 
         firstName: updatedUser.first_name, 
         lastName: updatedUser.last_name,
+        role: updatedUser.role, 
         is_admin: updatedUser.is_admin,
-        is_super_admin: updatedUser.is_super_admin || false
+        is_super_admin: updatedUser.is_super_admin || false,
+        is_adviser: updatedUser.is_adviser // ✅ ADDED
       },
       JWT_SECRET,
       { expiresIn: '1h' }
@@ -353,8 +365,10 @@ exports.verifyUpdateProfile = async (req, res) => {
         firstName: updatedUser.first_name,
         lastName: updatedUser.last_name,
         email: updatedUser.email,
+        role: updatedUser.role,
         is_admin: updatedUser.is_admin,
-        is_super_admin: updatedUser.is_super_admin
+        is_super_admin: updatedUser.is_super_admin,
+        is_adviser: updatedUser.is_adviser // ✅ ADDED
       }
     });
 

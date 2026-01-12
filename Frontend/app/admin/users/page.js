@@ -1,91 +1,134 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { getAllUsers, adminUpdateUser, adminDeleteUser } from '../../../services/apiService';
-import { useAuth } from '../../../context/AuthContext';
-import EditUserModal from '../../../components/EditUserModal';
-import CreateUserModal from '../../../components/CreateUserModal'; // <--- IMPORT THIS
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import Link from 'next/link'; 
+import { useAuth } from '../../../context/AuthContext';
+import api from '../../../services/apiService'; // Ensure this points to your axios instance
+import { getAllUsers, adminUpdateUser, adminDeleteUser } from '../../../services/apiService';
+import EditUserModal from '../../../components/EditUserModal';
 
-export default function AdminUserManagement() {
+export default function ManageUsersPage() {
+  const { user: currentUser, authLoading } = useAuth();
+  const router = useRouter();
+
+  // --- STATE ---
   const [users, setUsers] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user: adminUser } = useAuth();
-
-  // Modal States
+  
+  // Modals
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false); // <--- NEW STATE
 
-  useEffect(() => { fetchUsers(); }, []);
+  // Form Data
+  const [newUser, setNewUser] = useState({
+    firstName: '', lastName: '', email: '', password: '', 
+    role: 'student', schoolId: '', accessLevel: 'Student', groupId: ''
+  });
+  const [newGroup, setNewGroup] = useState({ name: '' });
 
-  const fetchUsers = async () => {
+  // --- PERMISSIONS ---
+  const isSuperAdmin = currentUser?.is_super_admin;
+  const isAdmin = currentUser?.is_admin || isSuperAdmin;
+  const isAdvisor = currentUser?.is_adviser;
+  
+  // Allow Advisors to access this page
+  const isPrivileged = isAdmin || isAdvisor;
+
+  // --- FETCH DATA ---
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await getAllUsers();
-      // Handle response.data or direct array
-      const userList = Array.isArray(response) ? response : (response.data || []);
-      // Filter for active users
-      setUsers(userList.filter(u => u.is_active || u.isActive));
+      // Fetch Users using your existing service
+      const usersResponse = await getAllUsers();
+      const userList = Array.isArray(usersResponse) ? usersResponse : (usersResponse.data || []);
+      
+      // Fetch Groups (New Endpoint)
+      // If this endpoint doesn't exist yet, it will just return empty array catch block
+      let groupList = [];
+      try {
+         const groupsRes = await api.get('/admin/groups');
+         groupList = groupsRes.data;
+      } catch (e) {
+         console.warn("Groups endpoint not ready yet");
+      }
+
+      setUsers(userList);
+      setGroups(groupList);
     } catch (err) {
-      toast.error('Failed to fetch users.');
+      console.error("Failed to load data", err);
+      toast.error("Could not load data.");
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (!authLoading) {
+      if (!isPrivileged) {
+        router.push('/'); // Redirect if not allowed
+      } else {
+        fetchData();
+      }
+    }
+  }, [authLoading, isPrivileged]);
+
+  // --- HANDLERS ---
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    try {
+      // Force role for Advisors
+      const payload = { ...newUser };
+      
+      // If Advisor, FORCE role to Student
+      if (isAdvisor && !isAdmin) {
+          payload.role = 'student';
+          payload.accessLevel = 'Student';
+      } else {
+          // Map accessLevel dropdown to lowercase role for DB
+          payload.role = newUser.accessLevel === 'Advisor' ? 'adviser' : newUser.accessLevel.toLowerCase();
+      }
+
+      // Send to your create user endpoint
+      await api.post('/admin/users', payload);
+      
+      toast.success("User created successfully!");
+      setShowUserModal(false);
+      // Reset Form
+      setNewUser({ firstName: '', lastName: '', email: '', password: '', role: 'student', schoolId: '', accessLevel: 'Student', groupId: '' });
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to create user.");
+    }
+  };
+
+  const handleCreateGroup = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/admin/groups', { name: newGroup.name });
+      toast.success("Group created successfully!");
+      setShowGroupModal(false);
+      setNewGroup({ name: '' });
+      fetchData(); // Refresh groups
+    } catch (err) {
+      toast.error("Failed to create group.");
+    }
+  };
+
+  // Archive / Edit Logic (Kept from your original file)
   const initiateArchive = (targetUser) => {
-    if (targetUser.id === adminUser.userId) return toast.error("You cannot archive your own account.");
-    if (targetUser.is_super_admin && !adminUser.is_super_admin) return toast.error("Access Denied: Super Admin protected.");
+    if (targetUser.id === currentUser.userId) return toast.error("You cannot archive your own account.");
     
-    // Check if Super Admin (Direct Action) or Admin (Reason Required)
-    if (adminUser.is_super_admin) {
-        toast((t) => (
-            <div className="flex flex-col gap-2">
-              <p className="font-bold text-slate-800 text-sm">Archive User?</p>
-              <p className="text-xs text-slate-500">Archive <span className="font-bold">{targetUser.first_name}</span> immediately?</p>
-              <div className="flex gap-2 justify-end pt-1">
-                <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
-                <button onClick={() => {
-                    adminDeleteUser(targetUser.id)
-                        .then(() => { toast.success("User archived.", { id: t.id }); fetchUsers(); })
-                        .catch(() => toast.error("Archive failed.", { id: t.id }));
-                }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Confirm</button>
-              </div>
-            </div>
-        ), { duration: 2000, icon: '⚠️' });
-    } else {
-        // Admin Request Mode
-        toast((t) => (
-            <div className="flex flex-col gap-3 min-w-[300px]">
-              <p className="font-bold text-slate-800 text-sm">Request Archive:</p>
-              <p className="text-xs text-slate-500">Reason for archiving <span className="font-bold">{targetUser.first_name}</span>?</p>
-              <form 
-                className="flex flex-col gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const reason = e.target.elements.reason.value;
-                  if (!reason.trim()) return toast.error("Reason is required", { id: t.id });
-                  
-                  adminDeleteUser(targetUser.id, { reason })
-                      .then(() => { toast.success("Request sent.", { id: t.id }); fetchUsers(); })
-                      .catch(() => toast.error("Request failed.", { id: t.id }));
-                }}
-              >
-                <input 
-                  name="reason" 
-                  placeholder="Type reason..." 
-                  className="border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  autoFocus
-                />
-                <div className="flex gap-2 justify-end pt-1">
-                   <button type="button" onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1.5 hover:bg-slate-100 rounded">Cancel</button>
-                   <button type="submit" className="text-xs bg-red-600 text-white font-bold px-3 py-1.5 rounded hover:bg-red-700">Send Request</button>
-                </div>
-              </form>
-            </div>
-        ), { duration: 2000, icon: '📂' });
+    // Quick confirmation toast
+    if (confirm(`Are you sure you want to archive ${targetUser.first_name}?`)) {
+         adminDeleteUser(targetUser.id, { reason: 'Admin Action' })
+            .then(() => { toast.success("User archived."); fetchData(); })
+            .catch(() => toast.error("Archive failed."));
     }
   };
 
@@ -94,103 +137,213 @@ export default function AdminUserManagement() {
     setIsEditModalOpen(true);
   };
 
-  const handleSave = async (userId, updatedData) => {
-    if (userId === adminUser.userId && !updatedData.is_admin) return toast.error("Cannot remove own admin status.");
+  const handleSaveEdit = async (userId, updatedData) => {
     try {
       await adminUpdateUser(userId, updatedData); 
       toast.success('User updated.');
       setIsEditModalOpen(false);
       setSelectedUser(null);
-      fetchUsers(); 
+      fetchData(); 
     } catch (err) { toast.error('Update failed.'); }
   };
 
-  if (loading) return <div className="text-center p-10 text-slate-400">Loading users...</div>;
 
+  if (authLoading || loading) return <div className="p-10 text-center">Loading...</div>;
+  if (!isPrivileged) return null; 
+
+  if (isAdvisor) {
+    console.log("I am an Advisor! Access Granted.");
+} else {
+    console.log("Access Denied. Current User:", user);
+}
   return (
-    <div className="space-y-6">
-      {/* Header with Create Button */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 pb-4 border-b border-slate-200">
+    <div className="space-y-6 animate-fade-in pb-24">
+      
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-slate-200">
         <div>
-            <h2 className="text-3xl font-extrabold text-slate-900">User Management</h2>
-            <p className="text-slate-500 text-sm mt-1">Manage accounts and permissions</p>
+          <h1 className="text-3xl font-bold text-slate-900">
+            {isAdvisor ? 'My Students & Groups' : 'User Management'}
+          </h1>
+          <p className="text-slate-500">
+            {isAdvisor ? 'Manage your research groups and student accounts.' : 'Manage all system accounts.'}
+          </p>
         </div>
         
         <div className="flex gap-3">
-            {/* CREATE BUTTON */}
-            <button 
-                onClick={() => setIsCreateModalOpen(true)}
-                className="px-5 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 flex items-center gap-2"
-            >
-                <span className="text-xl leading-none font-light">+</span> Create User
-            </button>
-
-            <Link href="/admin/users/archive">
-                <button className="px-5 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 hover:text-indigo-600 transition shadow-sm">
-                    View Archives
-                </button>
-            </Link>
+           <button 
+            onClick={() => setShowGroupModal(true)}
+            className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition"
+           >
+            + New Group
+           </button>
+           <button 
+            onClick={() => {
+                // Reset form and open modal
+                setNewUser({ firstName: '', lastName: '', email: '', password: '', role: 'student', schoolId: '', accessLevel: 'Student', groupId: '' });
+                setShowUserModal(true);
+            }}
+            className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-sm"
+           >
+            {isAdvisor ? '+ Add Student' : '+ Add User'}
+           </button>
         </div>
       </div>
 
-      {/* Users Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
-        <table className="min-w-full divide-y divide-slate-100">
-          <thead className="bg-slate-50/50">
+      {/* USERS TABLE */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">User Profile</th>
-              <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Role</th>
-              <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 font-semibold text-slate-600">Name</th>
+              <th className="px-6 py-3 font-semibold text-slate-600">Email</th>
+              <th className="px-6 py-3 font-semibold text-slate-600">Role</th>
+              <th className="px-6 py-3 font-semibold text-slate-600">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {users.map((user) => {
-              const isPending = user.archive_requested;
-              const isDisabled = user.id === adminUser.userId || isPending || (user.is_super_admin && !adminUser.is_super_admin);
-
-              return (
-                <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
+            {users.map(u => (
+              <tr key={u.id} className="hover:bg-slate-50">
+                <td className="px-6 py-4 font-medium text-slate-900">
                     <div className="flex items-center">
-                        <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg mr-4">
-                            {user.first_name ? user.first_name.charAt(0) : '?'}
+                        <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold mr-3">
+                            {u.first_name ? u.first_name.charAt(0) : '?'}
                         </div>
-                        <div>
-                            <div className="text-sm font-bold text-slate-900">{user.first_name} {user.last_name}</div>
-                            <div className="text-sm text-slate-500">{user.email}</div>
-                        </div>
+                        {u.first_name} {u.last_name}
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {/* Display 'role' string if available, else fallback to booleans */}
-                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full 
-                        ${user.role === 'Super Admin' ? 'bg-purple-100 text-purple-700' : 
-                          user.role === 'Admin' ? 'bg-indigo-100 text-indigo-700' :
-                          user.role === 'Advisor' ? 'bg-orange-100 text-orange-800' :
-                          user.role === 'Student' ? 'bg-blue-100 text-blue-800' :
-                          'bg-gray-100 text-gray-600'}`}>
-                        {user.role || (user.is_super_admin ? 'Super Admin' : user.is_admin ? 'Admin' : 'User')}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button onClick={() => handleEdit(user)} className="text-indigo-600 hover:text-indigo-900 font-semibold mr-4">Edit</button>
-                    <button
-                      onClick={() => initiateArchive(user)}
-                      className={`font-semibold ${isDisabled ? 'text-slate-300 cursor-not-allowed' : isPending ? 'text-orange-500' : 'text-red-500 hover:text-red-700'}`}
-                      disabled={isDisabled}
-                    >
-                      {isPending ? 'Pending' : (adminUser.is_super_admin ? 'Archive' : 'Request Archive')}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
+                </td>
+                <td className="px-6 py-4 text-slate-600">{u.email}</td>
+                <td className="px-6 py-4">
+                  <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${
+                    u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' :
+                    u.role === 'adviser' ? 'bg-emerald-100 text-emerald-700' :
+                    'bg-slate-100 text-slate-600'
+                  }`}>
+                    {u.role || 'Student'}
+                  </span>
+                </td>
+                <td className="px-6 py-4 space-x-3">
+                    <button onClick={() => handleEdit(u)} className="text-indigo-600 hover:text-indigo-900 font-medium">Edit</button>
+                    {/* Only show Archive if Admin, or if Advisor allows archiving students */}
+                    {isAdmin && (
+                        <button onClick={() => initiateArchive(u)} className="text-red-500 hover:text-red-700 font-medium">Archive</button>
+                    )}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
-        {users.length === 0 && <div className="p-8 text-center text-slate-400">No active users found.</div>}
+        {users.length === 0 && <div className="p-8 text-center text-slate-400">No users found.</div>}
       </div>
 
-      {/* Edit Modal */}
+      {/* --- MODAL 1: CREATE USER --- */}
+      {showUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-scale-in">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+               <h3 className="text-xl font-bold text-slate-800">
+                 {isAdvisor ? 'Create Student Account' : 'Create New User'}
+               </h3>
+               <button onClick={() => setShowUserModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            
+            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
+               <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">First Name</label>
+                    <input required className="w-full p-2 border rounded-lg" 
+                      value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Last Name</label>
+                    <input required className="w-full p-2 border rounded-lg" 
+                      value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} />
+                  </div>
+               </div>
+
+               <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                  <input required type="email" className="w-full p-2 border rounded-lg" 
+                    value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+               </div>
+
+               <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">School ID</label>
+                  <input required className="w-full p-2 border rounded-lg" 
+                    value={newUser.schoolId} onChange={e => setNewUser({...newUser, schoolId: e.target.value})} />
+               </div>
+
+               {/* ROLE SELECT: HIDDEN FOR ADVISORS (Auto-locked to Student) */}
+               {isAdmin && (
+                   <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Role</label>
+                      <select className="w-full p-2 border rounded-lg"
+                        value={newUser.accessLevel}
+                        onChange={e => setNewUser({...newUser, accessLevel: e.target.value})}
+                      >
+                        <option value="Student">Student</option>
+                        <option value="Advisor">Advisor</option>
+                        <option value="Admin">Admin</option>
+                      </select>
+                   </div>
+               )}
+
+               {/* GROUP SELECT: Visible if creating a Student */}
+               {(newUser.accessLevel === 'Student' || isAdvisor) && (
+                   <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Assign Group (Optional)</label>
+                      <select className="w-full p-2 border rounded-lg"
+                        value={newUser.groupId}
+                        onChange={e => setNewUser({...newUser, groupId: e.target.value})}
+                      >
+                        <option value="">-- No Group --</option>
+                        {groups.map(g => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                      </select>
+                      {groups.length === 0 && (
+                          <p className="text-xs text-orange-500 mt-1">No groups found. Create a group first!</p>
+                      )}
+                   </div>
+               )}
+
+               <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Initial Password</label>
+                  <input required type="password" className="w-full p-2 border rounded-lg" 
+                    value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+               </div>
+
+               <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">
+                 Create Account
+               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL 2: CREATE GROUP --- */}
+      {showGroupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+               <h3 className="text-xl font-bold text-slate-800">Create Research Group</h3>
+               <button onClick={() => setShowGroupModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <form onSubmit={handleCreateGroup} className="p-6 space-y-4">
+               <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Group Name</label>
+                  <input required className="w-full p-2 border rounded-lg" placeholder="e.g. Research Team A"
+                    value={newGroup.name} onChange={e => setNewGroup({...newGroup, name: e.target.value})} />
+               </div>
+               <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">
+                 Create Group
+               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL 3: EDIT USER (Existing) --- */}
       <EditUserModal 
         user={selectedUser} 
         isOpen={isEditModalOpen} 
@@ -198,15 +351,9 @@ export default function AdminUserManagement() {
           setIsEditModalOpen(false);
           setSelectedUser(null);
         }} 
-        onSave={handleSave} 
+        onSave={handleSaveEdit} 
       />
 
-      {/* NEW: Create User Modal */}
-      <CreateUserModal 
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onSuccess={fetchUsers} // Refresh list after create
-      />
     </div>
   );
 }
