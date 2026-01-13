@@ -197,10 +197,11 @@ exports.submitDeletionRequest = async (id, userId, reason) => {
 
 exports.findAllDeletionRequests = async () => {
   const { rows } = await db.query(
-    `SELECT id, title, filename, user_id, deletion_reason, created_at, ai_authors 
-     FROM documents 
-     WHERE deletion_requested = TRUE 
-     ORDER BY created_at ASC`
+    `SELECT d.*, u.first_name || ' ' || u.last_name as user_name 
+     FROM documents d
+     JOIN users u ON d.user_id = u.id
+     WHERE d.deletion_requested = TRUE 
+     ORDER BY d.created_at ASC`
   );
   return rows;
 };
@@ -229,10 +230,11 @@ exports.submitArchiveRequest = async (id, reason) => {
 
 exports.findAllArchiveRequests = async () => {
   const { rows } = await db.query(
-    `SELECT id, title, filename, user_id, archive_reason, created_at, ai_authors 
-     FROM documents 
-     WHERE archive_requested = TRUE 
-     ORDER BY created_at ASC`
+    `SELECT d.*, u.first_name || ' ' || u.last_name as user_name 
+     FROM documents d
+     JOIN users u ON d.user_id = u.id
+     WHERE d.archive_requested = TRUE 
+     ORDER BY d.created_at ASC`
   );
   return rows;
 };

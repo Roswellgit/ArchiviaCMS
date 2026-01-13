@@ -695,3 +695,59 @@ exports.deleteFormOption = async (req, res) => {
     res.status(500).json({ message: 'Error deleting option' });
   }
 };
+
+exports.getGroupMembers = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const members = await userModel.getGroupMembers(id);
+    res.json(members);
+  } catch (err) {
+    console.error("Fetch Members Error:", err);
+    res.status(500).json({ message: "Error fetching group members" });
+  }
+};
+
+/**
+ * Adds an existing active student to a group
+ */
+exports.addStudentToGroup = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const groupId = req.params.id;
+
+    if (!userId) return res.status(400).json({ message: "User ID is required." });
+
+    // 1. Verify the user exists and is a student
+    const user = await userModel.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found." });
+    
+    if (user.role !== 'student') {
+        return res.status(400).json({ message: "Only students can be added to research groups." });
+    }
+
+    // 2. Assign the student
+    await userModel.assignStudentToGroup(userId, groupId);
+    res.json({ message: "Student assigned to group successfully." });
+
+  } catch (err) {
+    console.error("Add Member Error:", err);
+    res.status(500).json({ message: "Error adding student to group." });
+  }
+};
+
+/**
+ * Removes a student from a group (sets their group_id to NULL)
+ */
+exports.removeStudentFromGroup = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) return res.status(400).json({ message: "User ID is required." });
+
+    await userModel.removeStudentFromGroup(userId);
+    res.json({ message: "Student removed from group successfully." });
+  } catch (err) {
+    console.error("Remove Member Error:", err);
+    res.status(500).json({ message: "Error removing student from group." });
+  }
+};

@@ -9,7 +9,6 @@ const { verifyToken, isAdmin } = require('../middleware/authMiddleware');
 // 1. ACCOUNT & GROUP CREATION
 // ==========================================
 
-// ✅ FIXED: Renamed '/create-account' to '/users' to match Frontend API call
 // Frontend calls: api.post('/admin/users', payload)
 router.post('/users', verifyToken, isAdmin, adminController.createAccount);
 
@@ -22,10 +21,15 @@ router.get('/analytics', verifyToken, adminController.getDashboardStats);
 router.get('/analytics/insight', verifyToken, adminController.getAnalyticsAiInsight);
 
 // ==========================================
-// 3. GROUPS
+// 3. GROUPS & MEMBERSHIP
 // ==========================================
 router.get('/groups', verifyToken, isAdmin, adminController.getAllGroups);
 router.delete('/groups/:id', verifyToken, isAdmin, adminController.deleteGroup);
+
+// ✅ NEW: Group Membership Routes (Fetch, Add, Remove)
+router.get('/groups/:id/members', verifyToken, isAdmin, adminController.getGroupMembers);
+router.post('/groups/:id/members', verifyToken, isAdmin, adminController.addStudentToGroup);
+router.delete('/groups/:id/members/:userId', verifyToken, isAdmin, adminController.removeStudentFromGroup);
 
 // ==========================================
 // 4. PROTECT ALL REMAINING ROUTES

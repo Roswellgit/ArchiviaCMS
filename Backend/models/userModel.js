@@ -52,7 +52,9 @@ exports.createAccount = async ({ firstName, lastName, email, passwordHash, role,
   return rows[0];
 };
 
-// --- GROUP MANAGEMENT ---
+// ==========================================
+// GROUP MANAGEMENT
+// ==========================================
 
 exports.createGroup = async (name, adviserId) => {
   // 1. Check for duplicates (Case Insensitive)
@@ -69,7 +71,6 @@ exports.createGroup = async (name, adviserId) => {
   return rows[0];
 };
 
-// ✅ ADDED THIS MISSING FUNCTION
 exports.deleteGroup = async (groupId) => {
   // 1. Unassign users from this group first to avoid errors
   await db.query('UPDATE users SET group_id = NULL WHERE group_id = $1', [groupId]);
@@ -79,7 +80,31 @@ exports.deleteGroup = async (groupId) => {
   return result.rowCount > 0;
 };
 
-// --- EXISTING METHODS ---
+// ✅ NEW: Get all members of a specific group
+exports.getGroupMembers = async (groupId) => {
+  const { rows } = await db.query(
+    `SELECT id, first_name, last_name, email, role, school_id 
+     FROM users 
+     WHERE group_id = $1 AND role = 'student' 
+     ORDER BY last_name`,
+    [groupId]
+  );
+  return rows;
+};
+
+// ✅ NEW: Assign a student to a group
+exports.assignStudentToGroup = async (userId, groupId) => {
+  await db.query('UPDATE users SET group_id = $1 WHERE id = $2', [groupId, userId]);
+};
+
+// ✅ NEW: Remove a student from a group
+exports.removeStudentFromGroup = async (userId) => {
+  await db.query('UPDATE users SET group_id = NULL WHERE id = $1', [userId]);
+};
+
+// ==========================================
+// EXISTING METHODS
+// ==========================================
 
 exports.createWithOTP = async ({ firstName, lastName, email, passwordHash, otp, otpExpires }) => {
   const { rows } = await db.query(
