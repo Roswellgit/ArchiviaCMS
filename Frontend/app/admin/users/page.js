@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../context/AuthContext';
 import api from '../../../services/apiService'; 
-import { getAllUsers, adminUpdateUser, adminDeleteUser } from '../../../services/apiService';
+import { getAllUsers, adminUpdateUser, adminDeleteUser, getFormOptions } from '../../../services/apiService';
 import EditUserModal from '../../../components/EditUserModal';
 
 export default function ManageUsersPage() {
@@ -16,25 +16,25 @@ export default function ManageUsersPage() {
   // --- STATE ---
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [options, setOptions] = useState({ yearLevels: [], strands: [] }); // ✅ NEW: Store academic options
   const [loading, setLoading] = useState(true);
   
   // Modals
   const [showUserModal, setShowUserModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  
-  // Group Members Modal State
   const [showMembersModal, setShowMembersModal] = useState(false);
+  
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [groupMembers, setGroupMembers] = useState([]);
   const [selectedStudentToAdd, setSelectedStudentToAdd] = useState('');
-
   const [selectedUser, setSelectedUser] = useState(null);
 
   // Form Data
   const [newUser, setNewUser] = useState({
     firstName: '', lastName: '', email: '', password: '', 
-    role: 'student', schoolId: '', accessLevel: 'Student', groupId: ''
+    role: 'student', schoolId: '', accessLevel: 'Student', groupId: '',
+    yearLevel: '', strand: '', section: '' // ✅ NEW: Academic fields added
   });
   const [newGroup, setNewGroup] = useState({ name: '' });
 
@@ -50,17 +50,23 @@ export default function ManageUsersPage() {
       setLoading(true);
       const usersResponse = await getAllUsers();
       const allUsers = Array.isArray(usersResponse) ? usersResponse : (usersResponse.data || []);
-      
-      // Filter for active users only for the main table
       const activeUsers = allUsers.filter(u => u.is_active); 
 
+      // Fetch Groups
       let groupList = [];
       try {
          const groupsRes = await api.get('/admin/groups');
          groupList = groupsRes.data;
-      } catch (e) {
-         console.warn("Groups endpoint not ready yet");
-      }
+      } catch (e) { console.warn("Groups endpoint not ready yet"); }
+
+      // ✅ NEW: Fetch Year Levels and Strands
+      try {
+        const { data } = await getFormOptions();
+        setOptions({
+          yearLevels: data.yearLevels || [],
+          strands: data.strands || []
+        });
+      } catch (e) { console.error("Failed to fetch options"); }
 
       setUsers(activeUsers);
       setGroups(groupList);
@@ -82,130 +88,138 @@ export default function ManageUsersPage() {
     }
   }, [authLoading, isPrivileged]);
 
-  // --- MEMBER MANAGEMENT HANDLERS ---
-
-  const openMembersModal = async (group) => {
-      setSelectedGroup(group);
-      setShowMembersModal(true);
-      fetchGroupMembers(group.id);
-  };
-
-  const fetchGroupMembers = async (groupId) => {
-      try {
-          const res = await api.get(`/admin/groups/${groupId}/members`);
-          setGroupMembers(res.data);
-      } catch (err) {
-          toast.error("Failed to fetch group members.");
-      }
-  };
-
-  const handleAddMember = async () => {
-      if (!selectedStudentToAdd) return toast.error("Please select a student.");
-      try {
-          await api.post(`/admin/groups/${selectedGroup.id}/members`, { userId: selectedStudentToAdd });
-          toast.success("Student added to group.");
-          setSelectedStudentToAdd('');
-          fetchGroupMembers(selectedGroup.id);
-          fetchData(); 
-      } catch (err) {
-          toast.error(err.response?.data?.message || "Failed to add student.");
-      }
-  };
-
-  const handleRemoveMember = async (userId) => {
-      if(!confirm("Remove this student from the group?")) return;
-      try {
-          await api.delete(`/admin/groups/${selectedGroup.id}/members/${userId}`);
-          toast.success("Student removed.");
-          fetchGroupMembers(selectedGroup.id);
-          fetchData();
-      } catch (err) {
-          toast.error("Failed to remove student.");
-      }
-  };
-
-  // --- ACCOUNT HANDLERS ---
+  // --- HANDLERS ---
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
     try {
-      const payload = { ...newUser };
+      const payload = { 
+        ...newUser,
+        // Send studentProfile object if it's a student
+        studentProfile: newUser.accessLevel === 'Student' ? {
+            yearLevel: newUser.yearLevel,
+            strand: newUser.strand,
+            section: newUser.section
+        } : undefined
+      };
+
       if (isAdvisor && !isAdmin) {
           payload.role = 'student';
           payload.accessLevel = 'Student';
       } else {
           payload.role = newUser.accessLevel === 'Advisor' ? 'adviser' : newUser.accessLevel.toLowerCase();
       }
+
       await api.post('/admin/users', payload);
       toast.success("User created successfully!");
       setShowUserModal(false);
-      setNewUser({ firstName: '', lastName: '', email: '', password: '', role: 'student', schoolId: '', accessLevel: 'Student', groupId: '' });
+      // Reset form
+      setNewUser({ firstName: '', lastName: '', email: '', password: '', role: 'student', schoolId: '', accessLevel: 'Student', groupId: '', yearLevel: '', strand: '', section: '' });
       fetchData();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to create user.");
     }
   };
 
-  const handleCreateGroup = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post('/admin/groups', { name: newGroup.name });
-      toast.success("Group created successfully!");
-      setShowGroupModal(false);
-      setNewGroup({ name: '' });
-      fetchData(); 
-    } catch (err) {
-      toast.error("Failed to create group.");
-    }
-  };
+  // ... (Keep existing fetchGroupMembers, openMembersModal, handleAddMember, handleRemoveMember, handleCreateGroup, handleDeleteGroup, initiateArchive, handleSaveEdit)
 
-  const handleDeleteGroup = async (groupId, groupName) => {
-    if (!confirm(`Delete group "${groupName}"? Students will be unassigned.`)) return;
+  const openMembersModal = async (group) => {
+    setSelectedGroup(group);
+    setShowMembersModal(true);
+    fetchGroupMembers(group.id);
+};
+
+const fetchGroupMembers = async (groupId) => {
     try {
-        await api.delete(`/admin/groups/${groupId}`);
-        toast.success("Group deleted.");
+        const res = await api.get(`/admin/groups/${groupId}/members`);
+        setGroupMembers(res.data);
+    } catch (err) {
+        toast.error("Failed to fetch group members.");
+    }
+};
+
+const handleAddMember = async () => {
+    if (!selectedStudentToAdd) return toast.error("Please select a student.");
+    try {
+        await api.post(`/admin/groups/${selectedGroup.id}/members`, { userId: selectedStudentToAdd });
+        toast.success("Student added to group.");
+        setSelectedStudentToAdd('');
+        fetchGroupMembers(selectedGroup.id);
+        fetchData(); 
+    } catch (err) {
+        toast.error(err.response?.data?.message || "Failed to add student.");
+    }
+};
+
+const handleRemoveMember = async (userId) => {
+    if(!confirm("Remove this student from the group?")) return;
+    try {
+        await api.delete(`/admin/groups/${selectedGroup.id}/members/${userId}`);
+        toast.success("Student removed.");
+        fetchGroupMembers(selectedGroup.id);
         fetchData();
     } catch (err) {
-        toast.error("Failed to delete group.");
+        toast.error("Failed to remove student.");
     }
-  };
+};
 
-  const initiateArchive = (targetUser) => {
-    if (targetUser.id === currentUser.userId) return toast.error("Cannot archive yourself.");
-    if (confirm(`Archive ${targetUser.first_name}?`)) {
-         adminDeleteUser(targetUser.id, { reason: 'Admin Action' })
-            .then(() => { toast.success("User archived."); fetchData(); })
-            .catch(() => toast.error("Archive failed."));
-    }
-  };
+const handleCreateGroup = async (e) => {
+  e.preventDefault();
+  try {
+    await api.post('/admin/groups', { name: newGroup.name });
+    toast.success("Group created successfully!");
+    setShowGroupModal(false);
+    setNewGroup({ name: '' });
+    fetchData(); 
+  } catch (err) {
+    toast.error("Failed to create group.");
+  }
+};
 
-  const handleSaveEdit = async (userId, updatedData) => {
-    try {
-      await adminUpdateUser(userId, updatedData); 
-      toast.success('User updated.');
-      setIsEditModalOpen(false);
-      fetchData(); 
-    } catch (err) { toast.error('Update failed.'); }
-  };
+const handleDeleteGroup = async (groupId, groupName) => {
+  if (!confirm(`Delete group "${groupName}"? Students will be unassigned.`)) return;
+  try {
+      await api.delete(`/admin/groups/${groupId}`);
+      toast.success("Group deleted.");
+      fetchData();
+  } catch (err) {
+      toast.error("Failed to delete group.");
+  }
+};
 
-  if (authLoading || loading) return <div className="p-10 text-center text-slate-500">Loading Management Data...</div>;
-  if (!isPrivileged) return null; 
+const initiateArchive = (targetUser) => {
+  if (targetUser.id === currentUser.userId) return toast.error("Cannot archive yourself.");
+  if (confirm(`Archive ${targetUser.first_name}?`)) {
+       adminDeleteUser(targetUser.id, { reason: 'Admin Action' })
+          .then(() => { toast.success("User archived."); fetchData(); })
+          .catch(() => toast.error("Archive failed."));
+  }
+};
 
-  // Dropdown list: Filter ONLY for students
+const handleSaveEdit = async (userId, updatedData) => {
+  try {
+    await adminUpdateUser(userId, updatedData); 
+    toast.success('User updated.');
+    setIsEditModalOpen(false);
+    fetchData(); 
+  } catch (err) { toast.error('Update failed.'); }
+};
+
+  if (authLoading || loading) return <div className="p-10 text-center">Loading...</div>;
+
   const availableStudents = users.filter(u => u.role === 'student');
+  const shouldShowStrand = ['Grade 11', 'Grade 12'].includes(newUser.yearLevel);
 
   return (
     <div className="space-y-6 animate-fade-in pb-24">
       
-      {/* HEADER SECTION */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-slate-200">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">
             {isAdvisor ? 'My Students & Groups' : 'User Management'}
           </h1>
-          <p className="text-slate-500">
-            Manage research groups and student accounts efficiently.
-          </p>
+          <p className="text-slate-500">Manage research groups and student accounts.</p>
         </div>
         
         <div className="flex gap-3">
@@ -216,29 +230,13 @@ export default function ManageUsersPage() {
                </button>
              </Link>
            )}
-
-           <button 
-            onClick={() => setShowGroupModal(true)}
-            className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition"
-           >
-            + New Group
-           </button>
-           
-           <button 
-            onClick={() => {
-                setNewUser({ firstName: '', lastName: '', email: '', password: '', role: 'student', schoolId: '', accessLevel: 'Student', groupId: '' });
-                setShowUserModal(true);
-            }}
-            className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-sm"
-           >
-            {isAdvisor ? '+ Add Student' : '+ Add User'}
-           </button>
+           <button onClick={() => setShowGroupModal(true)} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition">+ New Group</button>
+           <button onClick={() => setShowUserModal(true)} className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-sm">{isAdvisor ? '+ Add Student' : '+ Add User'}</button>
         </div>
       </div>
 
-      {/* ACTIVE USERS TABLE */}
+      {/* USERS TABLE */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 font-bold text-slate-700">Active Personnel</div>
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
@@ -263,48 +261,29 @@ export default function ManageUsersPage() {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                    {/* Only Admins can archive users */}
-                    {isAdmin && (
-                        <button onClick={() => initiateArchive(u)} className="text-red-500 hover:text-red-700 font-medium">Archive</button>
-                    )}
+                    {isAdmin && <button onClick={() => initiateArchive(u)} className="text-red-500 hover:text-red-700 font-medium">Archive</button>}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {users.length === 0 && <div className="p-8 text-center text-slate-400 italic">No active users found.</div>}
       </div>
 
-      {/* GROUP MANAGEMENT SECTION */}
+      {/* GROUPS MANAGEMENT */}
       <div className="mt-12">
           <h2 className="text-2xl font-bold text-slate-800 mb-4">Manage Groups</h2>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
               <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                          <th className="px-6 py-3 font-semibold text-slate-600">Group Name</th>
-                          <th className="px-6 py-3 font-semibold text-slate-600">Actions</th>
-                      </tr>
+                      <tr><th className="px-6 py-3 font-semibold text-slate-600">Group Name</th><th className="px-6 py-3 font-semibold text-slate-600">Actions</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                       {groups.map(g => (
                           <tr key={g.id} className="hover:bg-slate-50">
                               <td className="px-6 py-4 font-medium text-slate-900">{g.name}</td>
                               <td className="px-6 py-4 flex gap-4">
-                                  {/* Manage Members is open to Admins and Advisors */}
-                                  <button onClick={() => openMembersModal(g)} className="text-indigo-600 hover:text-indigo-800 font-medium transition">
-                                      Manage Members
-                                  </button>
-                                  
-                                  {/* Delete Group is Admin only */}
-                                  {isAdmin && (
-                                      <>
-                                        <span className="text-slate-300">|</span>
-                                        <button onClick={() => handleDeleteGroup(g.id, g.name)} className="text-red-600 hover:text-red-800 font-medium transition">
-                                            Delete Group
-                                        </button>
-                                      </>
-                                  )}
+                                  <button onClick={() => openMembersModal(g)} className="text-indigo-600 hover:text-indigo-800 font-medium transition">Manage Members</button>
+                                  {isAdmin && <button onClick={() => handleDeleteGroup(g.id, g.name)} className="text-red-600 hover:text-red-800 font-medium transition">Delete Group</button>}
                               </td>
                           </tr>
                       ))}
@@ -316,51 +295,37 @@ export default function ManageUsersPage() {
       {/* MODAL: MANAGE GROUP MEMBERS */}
       {showMembersModal && selectedGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
-                   <div>
-                       <h3 className="text-xl font-bold text-slate-800">Group Members</h3>
-                       <p className="text-sm text-slate-500">Assigning students to: {selectedGroup.name}</p>
-                   </div>
-                   <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+                   <div><h3 className="text-xl font-bold text-slate-800">Manage Members</h3><p className="text-sm text-slate-500">Group: {selectedGroup.name}</p></div>
+                   <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
                 </div>
-
                 <div className="p-6 overflow-y-auto flex-1 space-y-6">
                     <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                        <label className="block text-sm font-bold text-indigo-900 mb-2">Select Active Student to Add</label>
+                        <label className="block text-sm font-bold text-indigo-900 mb-2">Add Active Student to Group</label>
                         <div className="flex gap-2">
-                            <select className="flex-1 p-2 border border-indigo-200 rounded-lg text-sm bg-white" value={selectedStudentToAdd} onChange={(e) => setSelectedStudentToAdd(e.target.value)}>
-                                <option value="">-- Choose Student --</option>
+                            <select className="flex-1 p-2 border border-indigo-200 rounded-lg text-sm" value={selectedStudentToAdd} onChange={(e) => setSelectedStudentToAdd(e.target.value)}>
+                                <option value="">-- Select Student --</option>
                                 {availableStudents.map(student => (
                                     <option key={student.id} value={student.id}>{student.first_name} {student.last_name} ({student.email})</option>
                                 ))}
                             </select>
-                            <button onClick={handleAddMember} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition">Add</button>
+                            <button onClick={handleAddMember} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition">Add</button>
                         </div>
                     </div>
-
                     <div>
-                        <h4 className="font-bold text-slate-700 mb-3">Currently Enrolled ({groupMembers.length})</h4>
-                        <div className="border border-slate-100 rounded-xl overflow-hidden">
+                        <h4 className="font-bold text-slate-700 mb-3">Current Members ({groupMembers.length})</h4>
+                        <div className="border rounded-xl overflow-hidden">
                             <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 border-b">
-                                    <tr>
-                                        <th className="px-4 py-2 text-slate-500">Student Name</th>
-                                        <th className="px-4 py-2 text-right text-slate-500">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
+                                <thead className="bg-slate-50 border-b"><tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Email</th><th className="px-4 py-2 text-right">Action</th></tr></thead>
+                                <tbody className="divide-y">
                                     {groupMembers.map(member => (
-                                        <tr key={member.id} className="hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 font-medium">{member.first_name} {member.last_name}</td>
-                                            <td className="px-4 py-3 text-right">
-                                                <button onClick={() => handleRemoveMember(member.id)} className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 px-3 py-1.5 rounded-lg transition border border-red-100">Remove</button>
-                                            </td>
+                                        <tr key={member.id} className="hover:bg-slate-50">
+                                            <td className="px-4 py-3 font-medium text-slate-900">{member.first_name} {member.last_name}</td>
+                                            <td className="px-4 py-3 text-slate-50">{member.email}</td>
+                                            <td className="px-4 py-3 text-right"><button onClick={() => handleRemoveMember(member.id)} className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 px-2 py-1 rounded">Remove</button></td>
                                         </tr>
                                     ))}
-                                    {groupMembers.length === 0 && (
-                                        <tr><td colSpan="2" className="p-8 text-center text-slate-400 italic">No students currently in this group.</td></tr>
-                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -370,37 +335,88 @@ export default function ManageUsersPage() {
         </div>
       )}
 
-      {/* CREATE USER MODAL */}
+      {/* --- CREATE USER MODAL --- */}
       {showUserModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-scale-in">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                <h3 className="text-xl font-bold text-slate-800">{isAdvisor ? 'Create Student Account' : 'Create New User'}</h3>
-               <button onClick={() => setShowUserModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+               <button onClick={() => setShowUserModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
             </div>
-            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
+            
+            <form onSubmit={handleCreateUser} className="p-6 space-y-4 overflow-y-auto">
                <div className="grid grid-cols-2 gap-4">
                  <div><label className="block text-sm font-bold text-slate-700 mb-1">First Name</label><input required className="w-full p-2 border rounded-lg" value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} /></div>
                  <div><label className="block text-sm font-bold text-slate-700 mb-1">Last Name</label><input required className="w-full p-2 border rounded-lg" value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} /></div>
                </div>
+
                <div><label className="block text-sm font-bold text-slate-700 mb-1">Email</label><input required type="email" className="w-full p-2 border rounded-lg" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} /></div>
                <div><label className="block text-sm font-bold text-slate-700 mb-1">School ID</label><input required className="w-full p-2 border rounded-lg" value={newUser.schoolId} onChange={e => setNewUser({...newUser, schoolId: e.target.value})} /></div>
-               {isAdmin && (<div><label className="block text-sm font-bold text-slate-700 mb-1">Role</label><select className="w-full p-2 border rounded-lg" value={newUser.accessLevel} onChange={e => setNewUser({...newUser, accessLevel: e.target.value})}><option value="Student">Student</option><option value="Advisor">Advisor</option><option value="Admin">Admin</option></select></div>)}
-               {(newUser.accessLevel === 'Student' || isAdvisor) && (<div><label className="block text-sm font-bold text-slate-700 mb-1">Assign Group (Optional)</label><select className="w-full p-2 border rounded-lg" value={newUser.groupId} onChange={e => setNewUser({...newUser, groupId: e.target.value})}><option value="">-- No Group --</option>{groups.map(g => (<option key={g.id} value={g.id}>{g.name}</option>))}</select></div>)}
-               <div><label className="block text-sm font-bold text-slate-700 mb-1">Initial Password</label><input required type="password" className="w-full p-2 border rounded-lg" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} /></div>
+
+               {isAdmin && (
+                   <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">System Role</label>
+                      <select className="w-full p-2 border rounded-lg" value={newUser.accessLevel} onChange={e => setNewUser({...newUser, accessLevel: e.target.value})}>
+                        <option value="Student">Student</option>
+                        <option value="Advisor">Advisor</option>
+                        <option value="Admin">Admin</option>
+                      </select>
+                   </div>
+               )}
+
+               {/* ✅ NEW: YEAR LEVEL, SECTION, AND STRAND (Visible if creating a Student) */}
+               {(newUser.accessLevel === 'Student' || isAdvisor) && (
+                   <div className="bg-blue-50 p-4 rounded-xl space-y-4 border border-blue-100 mt-4">
+                      <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">🎓 Academic Details</p>
+                      
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Year Level</label>
+                        <select required className="w-full p-2 border rounded-lg bg-white" value={newUser.yearLevel} onChange={e => setNewUser({...newUser, yearLevel: e.target.value})}>
+                            <option value="">Select Year Level...</option>
+                            {options.yearLevels.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Section</label>
+                        <input required className="w-full p-2 border rounded-lg bg-white" placeholder="e.g. St. Thomas" value={newUser.section} onChange={e => setNewUser({...newUser, section: e.target.value})} />
+                      </div>
+
+                      {shouldShowStrand && (
+                        <div className="animate-fade-in">
+                            <label className="block text-sm font-bold text-slate-700 mb-1">Strand / Track</label>
+                            <select required className="w-full p-2 border rounded-lg bg-white" value={newUser.strand} onChange={e => setNewUser({...newUser, strand: e.target.value})}>
+                                <option value="">Select Strand...</option>
+                                {options.strands.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Assign to Group (Optional)</label>
+                        <select className="w-full p-2 border rounded-lg bg-white" value={newUser.groupId} onChange={e => setNewUser({...newUser, groupId: e.target.value})}>
+                            <option value="">-- No Group --</option>
+                            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                        </select>
+                      </div>
+                   </div>
+               )}
+
+               <div><label className="block text-sm font-bold text-slate-700 mb-1">Password</label><input required type="password" className="w-full p-2 border rounded-lg" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} /></div>
+
                <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">Create Account</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* CREATE GROUP MODAL */}
+      {/* ... (Create Group Modal remains same) */}
       {showGroupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
                <h3 className="text-xl font-bold text-slate-800">Create Research Group</h3>
-               <button onClick={() => setShowGroupModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+               <button onClick={() => setShowGroupModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
             </div>
             <form onSubmit={handleCreateGroup} className="p-6 space-y-4">
                <div><label className="block text-sm font-bold text-slate-700 mb-1">Group Name</label><input required className="w-full p-2 border rounded-lg" placeholder="e.g. Research Team A" value={newGroup.name} onChange={e => setNewGroup({...newGroup, name: e.target.value})} /></div>
@@ -409,9 +425,6 @@ export default function ManageUsersPage() {
           </div>
         </div>
       )}
-
-      {/* EDIT MODAL Component */}
-      <EditUserModal user={selectedUser} isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); setSelectedUser(null); }} onSave={handleSaveEdit} />
 
     </div>
   );
