@@ -30,7 +30,7 @@ function HomeContent() {
       getFilters(),             
       getPopularSearches()      
     ]).then(([filtersRes, popRes]) => {
-      setAvailableFilters(filtersRes.data || { authors: [], keywords: [], years: [], journals: [] });
+      setAvailableFilters(filtersRes.data || {  keywords: [], years: [], journals: [] });
       setPopularSearches(Array.isArray(popRes.data) ? popRes.data : []);
     }).catch(err => {
         console.error("Initial load error:", err);
@@ -62,11 +62,14 @@ function HomeContent() {
   }, [currentSearchTerm, isHeroMode]);
 
   
-  const handleSearch = (term) => {
-    if (!term) return; 
-    const cleanTerm = typeof term === 'string' ? term : String(term);
-    router.push(`/?q=${encodeURIComponent(cleanTerm)}`);
-  };
+const handleSearch = (term) => {
+  // 1. Clean the input (handle null/undefined and trim whitespace)
+  const cleanTerm = term ? String(term).trim() : '';
+  
+  // 2. Always push to the results view. 
+  // If cleanTerm is '', it shows all documents but stays on the results page.
+  router.push(`/?q=${encodeURIComponent(cleanTerm)}`);
+};
 
   const handleBrowseAll = () => {
     router.push('/?q='); 
@@ -74,9 +77,22 @@ function HomeContent() {
 
   const handleFilterChange = async (category, value) => {
     if (category === 'reset') {
-        setSelectedFilters({ authors: [], keywords: [], year: null, journal: [], dateRange: null });
-        const response = await searchDocuments(currentSearchTerm || '');
-        setDocuments(response.data);
+        // 1. Clear the local filter state
+        setSelectedFilters({ keywords: [], year: [], journal: [], dateRange: null });
+        
+        // 2. Clear the URL (Sets q to empty string so it stays in results mode, not Hero mode)
+        router.push('/?q=');
+        
+        // 3. Fetch the clean, full list of documents
+        setIsLoading(true);
+        try {
+            const response = await searchDocuments('');
+            setDocuments(response.data);
+        } catch(e) { 
+            console.error(e); 
+        } finally { 
+            setIsLoading(false); 
+        }
         return;
     }
     const newFilters = { ...selectedFilters, [category]: value };

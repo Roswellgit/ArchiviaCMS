@@ -6,7 +6,6 @@ export default function FilterSidebar({ filters, selectedFilters, onFilterChange
     dateRange: true,
     journals: true,
     years: true,
-    authors: true,
     keywords: false, 
   });
 
@@ -111,7 +110,7 @@ export default function FilterSidebar({ filters, selectedFilters, onFilterChange
       {renderSection('Date Added', 'dateRange', dateAddedOptions, true)}
       {renderSection('Journal / Source', 'journal', safeFilters.journals || [])}
       {renderSection('Publication Year', 'year', safeFilters.years || [])}
-      {renderSection('Authors', 'authors', safeFilters.authors || [])}
+     
       {renderSection('Keywords', 'keywords', safeFilters.keywords || [])}
     </div>
   );
