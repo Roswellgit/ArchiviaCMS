@@ -16,10 +16,9 @@ export default function ManageUsersPage() {
   // --- STATE ---
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [options, setOptions] = useState({ yearLevels: [], strands: [] }); // ✅ NEW: Store academic options
+  const [options, setOptions] = useState({ yearLevels: [], strands: [] });
   const [loading, setLoading] = useState(true);
   
-  // Modals
   const [showUserModal, setShowUserModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -33,8 +32,8 @@ export default function ManageUsersPage() {
   // Form Data
   const [newUser, setNewUser] = useState({
     firstName: '', lastName: '', email: '', password: '', 
-    role: 'student', schoolId: '', accessLevel: 'Student', groupId: '',
-    yearLevel: '', strand: '', section: '' // ✅ NEW: Academic fields added
+    role: 'student', schoolId: '', accessLevel: '', groupId: '',
+    yearLevel: '', strand: '', section: ''
   });
   const [newGroup, setNewGroup] = useState({ name: '' });
 
@@ -52,14 +51,12 @@ export default function ManageUsersPage() {
       const allUsers = Array.isArray(usersResponse) ? usersResponse : (usersResponse.data || []);
       const activeUsers = allUsers.filter(u => u.is_active); 
 
-      // Fetch Groups
       let groupList = [];
       try {
          const groupsRes = await api.get('/admin/groups');
          groupList = groupsRes.data;
-      } catch (e) { console.warn("Groups endpoint not ready yet"); }
+      } catch (e) { console.warn("Groups endpoint not ready"); }
 
-      // ✅ NEW: Fetch Year Levels and Strands
       try {
         const { data } = await getFormOptions();
         setOptions({
@@ -84,26 +81,29 @@ export default function ManageUsersPage() {
         router.push('/'); 
       } else {
         fetchData();
+        // Set default accessLevel based on hierarchy
+        if (isSuperAdmin) setNewUser(prev => ({...prev, accessLevel: 'Admin'}));
+        else if (isAdmin) setNewUser(prev => ({...prev, accessLevel: 'Advisor'}));
+        else if (isAdvisor) setNewUser(prev => ({...prev, accessLevel: 'Student'}));
       }
     }
-  }, [authLoading, isPrivileged]);
+  }, [authLoading, isPrivileged, isSuperAdmin, isAdmin, isAdvisor]);
 
   // --- HANDLERS ---
-
   const handleCreateUser = async (e) => {
     e.preventDefault();
     try {
       const payload = { 
         ...newUser,
-        // Send studentProfile object if it's a student
-        studentProfile: newUser.accessLevel === 'Student' ? {
+        studentProfile: (newUser.accessLevel === 'Student' || isAdvisor) ? {
             yearLevel: newUser.yearLevel,
             strand: newUser.strand,
             section: newUser.section
         } : undefined
       };
 
-      if (isAdvisor && !isAdmin) {
+      // Set DB role string based on selection
+      if (isAdvisor) {
           payload.role = 'student';
           payload.accessLevel = 'Student';
       } else {
@@ -113,32 +113,27 @@ export default function ManageUsersPage() {
       await api.post('/admin/users', payload);
       toast.success("User created successfully!");
       setShowUserModal(false);
-      // Reset form
-      setNewUser({ firstName: '', lastName: '', email: '', password: '', role: 'student', schoolId: '', accessLevel: 'Student', groupId: '', yearLevel: '', strand: '', section: '' });
+      setNewUser({ firstName: '', lastName: '', email: '', password: '', role: 'student', schoolId: '', accessLevel: '', groupId: '', yearLevel: '', strand: '', section: '' });
       fetchData();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to create user.");
     }
   };
 
-  // ... (Keep existing fetchGroupMembers, openMembersModal, handleAddMember, handleRemoveMember, handleCreateGroup, handleDeleteGroup, initiateArchive, handleSaveEdit)
-
   const openMembersModal = async (group) => {
     setSelectedGroup(group);
     setShowMembersModal(true);
     fetchGroupMembers(group.id);
-};
+  };
 
-const fetchGroupMembers = async (groupId) => {
+  const fetchGroupMembers = async (groupId) => {
     try {
         const res = await api.get(`/admin/groups/${groupId}/members`);
         setGroupMembers(res.data);
-    } catch (err) {
-        toast.error("Failed to fetch group members.");
-    }
-};
+    } catch (err) { toast.error("Failed to fetch group members."); }
+  };
 
-const handleAddMember = async () => {
+  const handleAddMember = async () => {
     if (!selectedStudentToAdd) return toast.error("Please select a student.");
     try {
         await api.post(`/admin/groups/${selectedGroup.id}/members`, { userId: selectedStudentToAdd });
@@ -146,64 +141,56 @@ const handleAddMember = async () => {
         setSelectedStudentToAdd('');
         fetchGroupMembers(selectedGroup.id);
         fetchData(); 
-    } catch (err) {
-        toast.error(err.response?.data?.message || "Failed to add student.");
-    }
-};
+    } catch (err) { toast.error(err.response?.data?.message || "Failed to add student."); }
+  };
 
-const handleRemoveMember = async (userId) => {
+  const handleRemoveMember = async (userId) => {
     if(!confirm("Remove this student from the group?")) return;
     try {
         await api.delete(`/admin/groups/${selectedGroup.id}/members/${userId}`);
         toast.success("Student removed.");
         fetchGroupMembers(selectedGroup.id);
         fetchData();
-    } catch (err) {
-        toast.error("Failed to remove student.");
+    } catch (err) { toast.error("Failed to remove student."); }
+  };
+
+  const handleCreateGroup = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/admin/groups', { name: newGroup.name });
+      toast.success("Group created successfully!");
+      setShowGroupModal(false);
+      setNewGroup({ name: '' });
+      fetchData(); 
+    } catch (err) { toast.error("Failed to create group."); }
+  };
+
+  const handleDeleteGroup = async (groupId, groupName) => {
+    if (!confirm(`Delete group "${groupName}"?`)) return;
+    try {
+        await api.delete(`/admin/groups/${groupId}`);
+        toast.success("Group deleted.");
+        fetchData();
+    } catch (err) { toast.error("Failed to delete group."); }
+  };
+
+  const initiateArchive = (targetUser) => {
+    if (targetUser.id === currentUser.userId) return toast.error("Cannot archive yourself.");
+    if (confirm(`Archive ${targetUser.first_name}?`)) {
+         adminDeleteUser(targetUser.id, { reason: 'Admin Action' })
+            .then(() => { toast.success("User archived."); fetchData(); })
+            .catch(() => toast.error("Archive failed."));
     }
-};
+  };
 
-const handleCreateGroup = async (e) => {
-  e.preventDefault();
-  try {
-    await api.post('/admin/groups', { name: newGroup.name });
-    toast.success("Group created successfully!");
-    setShowGroupModal(false);
-    setNewGroup({ name: '' });
-    fetchData(); 
-  } catch (err) {
-    toast.error("Failed to create group.");
-  }
-};
-
-const handleDeleteGroup = async (groupId, groupName) => {
-  if (!confirm(`Delete group "${groupName}"? Students will be unassigned.`)) return;
-  try {
-      await api.delete(`/admin/groups/${groupId}`);
-      toast.success("Group deleted.");
-      fetchData();
-  } catch (err) {
-      toast.error("Failed to delete group.");
-  }
-};
-
-const initiateArchive = (targetUser) => {
-  if (targetUser.id === currentUser.userId) return toast.error("Cannot archive yourself.");
-  if (confirm(`Archive ${targetUser.first_name}?`)) {
-       adminDeleteUser(targetUser.id, { reason: 'Admin Action' })
-          .then(() => { toast.success("User archived."); fetchData(); })
-          .catch(() => toast.error("Archive failed."));
-  }
-};
-
-const handleSaveEdit = async (userId, updatedData) => {
-  try {
-    await adminUpdateUser(userId, updatedData); 
-    toast.success('User updated.');
-    setIsEditModalOpen(false);
-    fetchData(); 
-  } catch (err) { toast.error('Update failed.'); }
-};
+  const handleSaveEdit = async (userId, updatedData) => {
+    try {
+      await adminUpdateUser(userId, updatedData); 
+      toast.success('User updated.');
+      setIsEditModalOpen(false);
+      fetchData(); 
+    } catch (err) { toast.error('Update failed.'); }
+  };
 
   if (authLoading || loading) return <div className="p-10 text-center">Loading...</div>;
 
@@ -219,7 +206,7 @@ const handleSaveEdit = async (userId, updatedData) => {
           <h1 className="text-3xl font-bold text-slate-900">
             {isAdvisor ? 'My Students & Groups' : 'User Management'}
           </h1>
-          <p className="text-slate-500">Manage research groups and student accounts.</p>
+          <p className="text-slate-500">Manage research groups and system accounts.</p>
         </div>
         
         <div className="flex gap-3">
@@ -231,7 +218,9 @@ const handleSaveEdit = async (userId, updatedData) => {
              </Link>
            )}
            <button onClick={() => setShowGroupModal(true)} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition">+ New Group</button>
-           <button onClick={() => setShowUserModal(true)} className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-sm">{isAdvisor ? '+ Add Student' : '+ Add User'}</button>
+           <button onClick={() => setShowUserModal(true)} className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-sm">
+             {isAdvisor ? '+ Add Student' : '+ Add User'}
+           </button>
         </div>
       </div>
 
@@ -322,7 +311,7 @@ const handleSaveEdit = async (userId, updatedData) => {
                                     {groupMembers.map(member => (
                                         <tr key={member.id} className="hover:bg-slate-50">
                                             <td className="px-4 py-3 font-medium text-slate-900">{member.first_name} {member.last_name}</td>
-                                            <td className="px-4 py-3 text-slate-50">{member.email}</td>
+                                            <td className="px-4 py-3 text-slate-500">{member.email}</td>
                                             <td className="px-4 py-3 text-right"><button onClick={() => handleRemoveMember(member.id)} className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 px-2 py-1 rounded">Remove</button></td>
                                         </tr>
                                     ))}
@@ -353,18 +342,24 @@ const handleSaveEdit = async (userId, updatedData) => {
                <div><label className="block text-sm font-bold text-slate-700 mb-1">Email</label><input required type="email" className="w-full p-2 border rounded-lg" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} /></div>
                <div><label className="block text-sm font-bold text-slate-700 mb-1">School ID</label><input required className="w-full p-2 border rounded-lg" value={newUser.schoolId} onChange={e => setNewUser({...newUser, schoolId: e.target.value})} /></div>
 
-               {isAdmin && (
+               {/* ✅ STRICT ROLE SELECTION BASED ON HIERARCHY */}
+               {!isAdvisor && (
                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">System Role</label>
-                      <select className="w-full p-2 border rounded-lg" value={newUser.accessLevel} onChange={e => setNewUser({...newUser, accessLevel: e.target.value})}>
-                        <option value="Student">Student</option>
-                        <option value="Advisor">Advisor</option>
-                        <option value="Admin">Admin</option>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Select Role to Create</label>
+                      <select 
+                        required 
+                        className="w-full p-2 border rounded-lg" 
+                        value={newUser.accessLevel} 
+                        onChange={e => setNewUser({...newUser, accessLevel: e.target.value})}
+                      >
+                        <option value="">-- Choose Role --</option>
+                        {isSuperAdmin && <option value="Admin">Admin</option>}
+                        {(isAdmin && !isSuperAdmin) && <option value="Advisor">Advisor</option>}
                       </select>
                    </div>
                )}
 
-               {/* ✅ NEW: YEAR LEVEL, SECTION, AND STRAND (Visible if creating a Student) */}
+               {/* ✅ ACADEMIC DETAILS: Visible for Advisors or if creating a Student */}
                {(newUser.accessLevel === 'Student' || isAdvisor) && (
                    <div className="bg-blue-50 p-4 rounded-xl space-y-4 border border-blue-100 mt-4">
                       <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">🎓 Academic Details</p>
@@ -402,7 +397,7 @@ const handleSaveEdit = async (userId, updatedData) => {
                    </div>
                )}
 
-               <div><label className="block text-sm font-bold text-slate-700 mb-1">Password</label><input required type="password" className="w-full p-2 border rounded-lg" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} /></div>
+               <div><label className="block text-sm font-bold text-slate-700 mb-1">Temporary Password</label><input required type="password" className="w-full p-2 border rounded-lg" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} /></div>
 
                <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">Create Account</button>
             </form>
@@ -410,7 +405,7 @@ const handleSaveEdit = async (userId, updatedData) => {
         </div>
       )}
 
-      {/* ... (Create Group Modal remains same) */}
+      {/* CREATE GROUP MODAL */}
       {showGroupModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">

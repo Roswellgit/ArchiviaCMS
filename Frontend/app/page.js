@@ -20,9 +20,9 @@ function HomeContent() {
   const [heroInput, setHeroInput] = useState(''); 
 
   
-  const [availableFilters, setAvailableFilters] = useState({ authors: [], keywords: [], years: [], journals: [] });
+  const [availableFilters, setAvailableFilters] = useState({  keywords: [], years: [], journals: [] });
   const [popularSearches, setPopularSearches] = useState([]);
-  const [selectedFilters, setSelectedFilters] = useState({ authors: [], keywords: [], year: null, journal: [], dateRange: null });
+  const [selectedFilters, setSelectedFilters] = useState({  keywords: [], year: [], journal: [], dateRange: null });
 
   
   useEffect(() => {

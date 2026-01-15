@@ -21,27 +21,39 @@ exports.createAccount = async (req, res) => {
     const { firstName, lastName, email, password, role, accessLevel, schoolId, studentProfile, groupId } = req.body;
     const requester = req.user; 
 
-    if (!firstName || !lastName || !email || !password || !role || !accessLevel || !schoolId) {
+    if (!firstName || !lastName || !email || !password || !accessLevel || !schoolId) {
       return res.status(400).json({ message: 'All fields (including ID) are required' });
     }
 
-    // --- PERMISSION LOGIC ---
-    if (!requester.is_admin && !requester.is_super_admin && !requester.is_adviser) {
+    // ==========================================
+    // ✅ STRICT ROLE HIERARCHY ENFORCEMENT
+    // ==========================================
+    
+    let finalRole = role;
+
+    if (requester.is_super_admin) {
+        // 1. Super Admin -> Can only create Admins
+        if (accessLevel !== 'Admin') {
+            return res.status(403).json({ message: 'Super Admins are only authorized to create Admin accounts.' });
+        }
+        finalRole = 'admin';
+    } 
+    else if (requester.is_admin) {
+        // 2. Admin -> Can only create Advisors
+        if (accessLevel !== 'Advisor') {
+            return res.status(403).json({ message: 'Admins are only authorized to create Advisor accounts.' });
+        }
+        finalRole = 'adviser';
+    } 
+    else if (requester.is_adviser) {
+        // 3. Advisor -> Can only create Students
+        if (accessLevel !== 'Student') {
+            return res.status(403).json({ message: 'Advisors are only authorized to create Student accounts.' });
+        }
+        finalRole = 'student';
+    } 
+    else {
         return res.status(403).json({ message: 'Permission denied.' });
-    }
-    
-    // Advisors -> Can ONLY create Students
-    if (requester.is_adviser && !requester.is_admin && !requester.is_super_admin) {
-        if (accessLevel !== 'Student') { 
-            return res.status(403).json({ message: 'Advisers can only create Student accounts.' });
-        }
-    }
-    
-    // Admins -> Can create Admins, Advisors, Students (NOT Super Admins)
-    if (requester.is_admin && !requester.is_super_admin) {
-        if (accessLevel === 'Super Admin') {
-            return res.status(403).json({ message: 'Admins cannot create Super Admin accounts.' });
-        }
     }
 
     await client.query('BEGIN'); 
@@ -62,9 +74,9 @@ exports.createAccount = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const isSuperAdmin = accessLevel === 'Super Admin';
-    const isAdmin = accessLevel === 'Admin' || isSuperAdmin;
-    const isAdviser = accessLevel === 'Advisor';
+    const isSuperAdminFlag = finalRole === 'superadmin';
+    const isAdminFlag = finalRole === 'admin' || isSuperAdminFlag;
+    const isAdviserFlag = finalRole === 'adviser';
     
     const insertUserQuery = `
       INSERT INTO users (
@@ -79,12 +91,13 @@ exports.createAccount = async (req, res) => {
     const finalGroupId = (groupId && groupId !== '') ? groupId : null;
 
     const userResult = await client.query(insertUserQuery, [
-      firstName, lastName, email, hashedPassword, role, 
-      isAdmin, isSuperAdmin, isAdviser, schoolId, finalGroupId
+      firstName, lastName, email, hashedPassword, finalRole, 
+      isAdminFlag, isSuperAdminFlag, isAdviserFlag, schoolId, finalGroupId
     ]);
 
     const newUserId = userResult.rows[0].id;
 
+    // Save Academic Profile for Students
     if (accessLevel === 'Student' && studentProfile) {
       const { yearLevel, strand, section } = studentProfile;
       await client.query(
@@ -97,7 +110,7 @@ exports.createAccount = async (req, res) => {
     emailService.sendWelcomeEmail(email, firstName, password).catch(console.error);
 
     res.status(201).json({
-      message: `${role} (${accessLevel}) created successfully.`,
+      message: `Account created successfully as ${finalRole}.`,
       user: userResult.rows[0]
     });
 
@@ -128,7 +141,6 @@ exports.createGroup = async (req, res) => {
         finalAdviserId = adviserId || null; 
     }
 
-    // ✅ UPDATED: Call model and handle duplicate error
     try {
         const newGroup = await userModel.createGroup(name, finalAdviserId);
         res.status(201).json({ message: 'Group created successfully', group: newGroup });
@@ -136,7 +148,7 @@ exports.createGroup = async (req, res) => {
         if (modelErr.message === 'Group name already exists' || modelErr.code === '23505') {
             return res.status(409).json({ message: 'A group with this name already exists.' });
         }
-        throw modelErr; // Re-throw unexpected errors
+        throw modelErr;
     }
 
   } catch (error) {
@@ -155,13 +167,11 @@ exports.getAllGroups = async (req, res) => {
   }
 };
 
-// ✅ ADDED DELETE GROUP CONTROLLER
 exports.deleteGroup = async (req, res) => {
   try {
     const { id } = req.params;
     const requester = req.user;
 
-    // Strictly Allow Only Admins/Super Admins
     if (!requester.is_admin && !requester.is_super_admin) {
         return res.status(403).json({ message: "Only Admins can delete groups." });
     }
@@ -183,7 +193,6 @@ exports.deleteGroup = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
   try {
-    // This returns ALL users. If you want Advisors to only see Students, filter here.
     const users = await userModel.findAll();
     res.json(users);
   } catch (err) {
@@ -197,7 +206,6 @@ exports.updateUser = async (req, res) => {
     const { id } = req.params;
     const { first_name, last_name, email, is_admin } = req.body; 
     
-    // Validate inputs if necessary
     const updatedUser = await userModel.updateUserDetails(id, { first_name, last_name, email, is_admin });
     if (!updatedUser) return res.status(404).json({ message: 'User not found.' });
     res.json(updatedUser);
@@ -470,11 +478,9 @@ exports.rejectDeletion = async (req, res) => {
 
 exports.getDashboardStats = async (req, res) => {
   try {
-    // 1. Fetch Basic Data
     const users = await userModel.findAll();
     const documents = await documentModel.findAll(true);
 
-    // 2. Fetch Graph Data
     const [
       topSearches,
       uploadTrend,
@@ -489,7 +495,6 @@ exports.getDashboardStats = async (req, res) => {
       analyticsModel.getDocumentsByYearLevel()
     ]);
 
-    // 3. Calculate Scalars
     const totalUsers = users.length;
     const activeUsers = users.filter(u => u.is_active).length;
     const totalDocuments = documents.length;
@@ -696,6 +701,10 @@ exports.deleteFormOption = async (req, res) => {
   }
 };
 
+// ==========================================
+// 7. GROUP MEMBERSHIP MANAGEMENT
+// ==========================================
+
 exports.getGroupMembers = async (req, res) => {
   try {
     const { id } = req.params;
@@ -707,9 +716,6 @@ exports.getGroupMembers = async (req, res) => {
   }
 };
 
-/**
- * Adds an existing active student to a group
- */
 exports.addStudentToGroup = async (req, res) => {
   try {
     const { userId } = req.body;
@@ -717,7 +723,6 @@ exports.addStudentToGroup = async (req, res) => {
 
     if (!userId) return res.status(400).json({ message: "User ID is required." });
 
-    // 1. Verify the user exists and is a student
     const user = await userModel.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found." });
     
@@ -725,7 +730,6 @@ exports.addStudentToGroup = async (req, res) => {
         return res.status(400).json({ message: "Only students can be added to research groups." });
     }
 
-    // 2. Assign the student
     await userModel.assignStudentToGroup(userId, groupId);
     res.json({ message: "Student assigned to group successfully." });
 
@@ -735,9 +739,6 @@ exports.addStudentToGroup = async (req, res) => {
   }
 };
 
-/**
- * Removes a student from a group (sets their group_id to NULL)
- */
 exports.removeStudentFromGroup = async (req, res) => {
   try {
     const { userId } = req.params;

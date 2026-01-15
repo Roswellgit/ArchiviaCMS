@@ -89,7 +89,7 @@ exports.getAllMetadata = async () => {
   return rows;
 };
 
-exports.filterByFacets = async ({ authors, keywords, year, journal, dateRange }, includeArchived = false) => {
+exports.filterByFacets = async ({ keywords, year, journal, dateRange }, includeArchived = false) => {
   let query = `SELECT * FROM documents WHERE 1=1`;
   const params = [];
   let paramIndex = 1;
@@ -98,15 +98,28 @@ exports.filterByFacets = async ({ authors, keywords, year, journal, dateRange },
       query += ` AND (archive_requested IS NOT TRUE AND status = 'approved')`;
   }
 
-  if (authors && authors.length > 0) {
-    const conditions = authors.map(a => { params.push(`%${a}%`); return `ai_authors::text ILIKE $${paramIndex++}`; });
-    query += ` AND (${conditions.join(' OR ')})`;
-  }
   if (keywords && keywords.length > 0) {
     const conditions = keywords.map(k => { params.push(`%${k}%`); return `ai_keywords::text ILIKE $${paramIndex++}`; });
     query += ` AND (${conditions.join(' OR ')})`;
   }
-  if (year) { params.push(`%${year}%`); query += ` AND ai_date_created::text ILIKE $${paramIndex++}`; }
+  // ✅ Replace the current "if (year)" block with this:
+if (year) {
+  // Ensure 'year' is always an array to simplify processing
+  const yearArray = Array.isArray(year) ? year : [year];
+  const yearConditions = [];
+
+  yearArray.forEach((y) => {
+    if (y) {
+      params.push(`%${y}%`);
+      yearConditions.push(`ai_date_created::text ILIKE $${paramIndex++}`);
+    }
+  });
+
+  // Use OR so we find documents matching ANY of the selected years
+  if (yearConditions.length > 0) {
+    query += ` AND (${yearConditions.join(' OR ')})`;
+  }
+}
   
   if (journal && journal.length > 0) {
     const conditions = journal.map(j => { params.push(j); return `ai_journal = $${paramIndex++}`; });
