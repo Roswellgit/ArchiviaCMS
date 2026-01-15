@@ -18,11 +18,11 @@ export default function Navbar() {
   const isAdmin = user?.is_admin || isSuperAdmin; 
   const isAdvisor = user?.is_adviser; 
   
-  // Advisors are "Privileged" (can access Dashboard/Users), but not full Admins
   const isPrivileged = isAdmin || isAdvisor;
 
   const isAuthPage = pathname === '/login' || pathname === '/register';
-  const shouldShowLoginLink = !isAuthenticated && pathname !== '/login' && pathname !== '/register';
+  // Logic to show Sign In only if not authenticated and not already on the login page
+  const shouldShowLoginLink = !isAuthenticated && pathname !== '/login';
 
   useEffect(() => {
     setIsDropdownOpen(false);
@@ -107,23 +107,11 @@ export default function Navbar() {
                   <span className="font-semibold">{user?.firstName}</span>
                   
                   {/* --- BADGE --- */}
-                  {isSuperAdmin ? (
-                    <span className="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">
-                      {user?.role || 'Principal'}
-                    </span>
-                  ) : isAdmin ? (
-                    <span className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">
-                      {user?.role || 'Admin'}
-                    </span>
-                  ) : isAdvisor ? (
-                    <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">
-                      {user?.role || 'Advisor'}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] bg-slate-500 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">
-                      {user?.role || 'Student'}
-                    </span>
-                  )}
+                  <span className={`text-[10px] text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm ${
+                    isSuperAdmin ? 'bg-purple-600' : isAdmin ? 'bg-indigo-600' : isAdvisor ? 'bg-emerald-600' : 'bg-slate-500'
+                  }`}>
+                    {user?.role || (isSuperAdmin ? 'Principal' : isAdmin ? 'Admin' : isAdvisor ? 'Advisor' : 'Student')}
+                  </span>
 
                   <svg className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : 'rotate-0'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
@@ -132,35 +120,26 @@ export default function Navbar() {
 
                 {/* Dropdown Menu */}
                 {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-[100] animate-fade-in origin-top-right ring-1 ring-black ring-opacity-5 focus:outline-none">
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-[100] animate-fade-in origin-top-right ring-1 ring-black ring-opacity-5">
                     <div className="px-4 py-2 border-b border-gray-50 mb-1">
                         <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">My Account</p>
                     </div>
                     
-                    {/* PRIVILEGED SECTION (Admins & Advisors) */}
                     {isPrivileged && (
                       <div className="border-b border-gray-100 pb-1 mb-1">
-                        {/* Both Roles See Dashboard & Users */}
                         <Link href="/admin" className="block px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium">Admin Dashboard</Link>
                         <Link href="/admin/users" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600">Manage Users</Link>
                         
-                        {/* ❌ REVERTED: ONLY ADMINS SEE DOCUMENTS & REQUESTS */}
                         {isAdmin && (
                           <>
                             <Link href="/admin/documents" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600">Manage Documents</Link>
-                            
                             <div className="my-1 border-t border-slate-50"></div>
                             <p className="px-4 py-1 text-[10px] text-gray-400 uppercase tracking-wider font-bold">Requests</p>
-                            
                             <Link href="/admin/requests?filter=deletion" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-orange-600">Deletion Requests</Link>
                             <Link href="/admin/requests?filter=archiving" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-orange-600">Document Archiving</Link>
                             <Link href="/admin/archive-requests" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-red-600">User Archiving</Link>
-                            
                             {isSuperAdmin && (
-                                <>
-                                  <div className="my-1 border-t border-slate-50"></div>
-                                  <Link href="/admin/theme" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-purple-600">Manage Theme</Link>
-                                </>
+                              <Link href="/admin/theme" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-purple-600">Manage Theme</Link>
                             )}
                           </>
                         )}
@@ -181,8 +160,15 @@ export default function Navbar() {
               </li>
             ) : (
               <div className="flex items-center space-x-3">
-                {shouldShowLoginLink && <Link href="/login" style={{ color: 'var(--navbar-link-color)' }} className="px-4 py-2 hover:text-indigo-600 transition-colors font-medium">Sign In</Link>}
-                {!isAuthPage && <Link href="/register" className="px-5 py-2.5 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700">Get Started</Link>}
+                {shouldShowLoginLink && (
+                  <Link 
+                    href="/login" 
+                    style={{ color: 'var(--navbar-link-color)' }} 
+                    className="px-4 py-2 hover:text-indigo-600 transition-colors font-medium"
+                  >
+                    Sign In
+                  </Link>
+                )}
               </div>
             )}
           </ul>
@@ -191,11 +177,10 @@ export default function Navbar() {
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden pb-4 pt-2">
-             <ul className="flex flex-col space-y-4 font-medium text-sm bg-white/50 backdrop-blur-md rounded-xl p-4 shadow-lg">
+              <ul className="flex flex-col space-y-4 font-medium text-sm bg-white/50 backdrop-blur-md rounded-xl p-4 shadow-lg">
                 {!isAuthPage && !isAdmin && <li><Link href="/" className="block text-slate-700 hover:text-indigo-600">Search</Link></li>}
                 
                 {isAuthenticated && !isAdmin && <li><Link href="/analytics" className="block text-indigo-600">Analytics</Link></li>}
-                
                 {isAuthenticated && !isAdmin && <li><Link href="/upload" className="block text-slate-700 hover:text-indigo-600">Upload</Link></li>}
                 
                 {isAuthenticated ? (
@@ -206,11 +191,8 @@ export default function Navbar() {
                     
                     {isPrivileged && (
                       <div className="pl-2 mt-2 border-l-2 border-indigo-100">
-                        {/* Advisors see these two */}
                         <Link href="/admin" className="block py-2 text-indigo-600 font-bold">Admin Dashboard</Link>
                         <Link href="/admin/users" className="block py-2 text-slate-600">Manage Users</Link>
-                        
-                        {/* Advisors DO NOT see these */}
                         {isAdmin && (
                             <>
                                 <Link href="/admin/requests?filter=deletion" className="block py-2 text-slate-600">Deletion Requests</Link>
@@ -224,11 +206,14 @@ export default function Navbar() {
                   </li>
                 ) : (
                   <li className="pt-2 border-t border-gray-200 flex flex-col gap-3">
-                      {shouldShowLoginLink && <Link href="/login" className="block text-slate-700">Sign In</Link>}
-                      {!isAuthPage && <Link href="/register" className="block text-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg">Get Started</Link>}
+                      {shouldShowLoginLink && (
+                        <Link href="/login" className="block text-slate-700 px-2 py-1">
+                          Sign In
+                        </Link>
+                      )}
                   </li>
                 )}
-             </ul>
+              </ul>
           </div>
         )}
       </div>

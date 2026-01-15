@@ -227,12 +227,13 @@ export default function LoginForm() {
         />
       </div>
       
-      <p className="mt-8 text-center text-sm text-slate-500">
-        Don&apos;t have an account?{' '}
-        <Link href="/register" className="text-indigo-600 hover:text-indigo-800 font-bold transition-colors">
-          Create one now
-        </Link>
-      </p>
+ {/*  /*  /* <p className="text-center text-sm text-slate-500">
+  Don't have an account?{' '}
+  <Link href="/register" className="text-indigo-600 font-bold hover:underline">
+    Create an Account
+  </Link>
+</p> 
+*/ }
 
       {/* === GOOGLE REGISTRATION PASSWORD MODAL === */}
       {showGoogleModal && googleUser && (
