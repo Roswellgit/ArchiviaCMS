@@ -7,6 +7,83 @@ import {
 } from '../services/apiService'; 
 import { useAuth } from '../context/AuthContext'; 
 
+// --- HELPER: Manageable Select ---
+const ManageableSelect = ({ label, type, value, setValue, list, canManage, fetchOptions }) => {
+  const [isManaging, setIsManaging] = useState(false);
+  const [newItem, setNewItem] = useState('');
+
+  const handleAdd = async () => {
+    if (!newItem) return;
+    try {
+      await addFormOption(type, newItem);
+      await fetchOptions(); 
+      setNewItem('');
+    } catch (err) {
+      alert("Failed to add option. It might already exist.");
+    }
+  };
+
+  const handleDelete = async (item) => {
+    if (!window.confirm(`Delete ${item}?`)) return;
+    try {
+      await deleteFormOption(type, item);
+      await fetchOptions();
+      if (value === item) setValue('');
+    } catch (err) {
+      alert("Failed to delete option");
+    }
+  };
+
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between items-end mb-1">
+        <label className="block text-sm font-medium text-gray-700">{label}</label>
+        {canManage && (
+          <button 
+            type="button" 
+            onClick={() => setIsManaging(!isManaging)} 
+            className="text-xs text-blue-600 underline hover:text-blue-800 font-semibold cursor-pointer"
+          >
+            {isManaging ? 'Done' : '⚙️ Manage Options'}
+          </button>
+        )}
+      </div>
+
+      {isManaging ? (
+        <div className="bg-gray-50 p-2 rounded border border-gray-200 animate-fade-in">
+          <div className="flex gap-2 mb-2">
+            <input value={newItem} onChange={(e) => setNewItem(e.target.value)} className="flex-1 px-2 py-1 text-sm border rounded" placeholder={`New ${label}...`} />
+            <button type="button" onClick={handleAdd} className="bg-blue-600 text-white px-2 rounded text-sm hover:bg-blue-700">Add</button>
+          </div>
+          <ul className="max-h-24 overflow-y-auto">
+            {list.map(item => (
+              <li key={item} className="flex justify-between text-xs py-1 border-b last:border-0 items-center">
+                <span>{item}</span>
+                <button type="button" onClick={() => handleDelete(item)} className="text-red-500 hover:text-red-700 font-bold px-1">✕</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <select value={value} onChange={(e) => setValue(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white" required>
+          <option value="">Select {label}...</option>
+          {list.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      )}
+    </div>
+  );
+};
+
+// --- HELPER: Password Requirement ---
+const RequirementItem = ({ met, text }) => (
+  <li className={`flex items-center gap-2 text-xs ${met ? 'text-emerald-600 font-medium' : 'text-slate-400'}`}>
+    <span className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] ${met ? 'bg-emerald-100' : 'bg-slate-100'}`}>
+      {met ? '✓' : '•'}
+    </span>
+    {text}
+  </li>
+);
+
 const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   const { user } = useAuth(); 
 
@@ -19,8 +96,6 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   });
 
   const [options, setOptions] = useState({ roles: [], yearLevels: [], strands: [] });
-  
-  // SEPARATE STATE: Job Title vs System Permission
   const [roleTitle, setRoleTitle] = useState(''); 
   const [accessLevel, setAccessLevel] = useState(''); 
 
@@ -32,29 +107,48 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   const [error, setError] = useState('');
   const [canManageOptions, setCanManageOptions] = useState(false);
 
-  // --- NEW: PASSWORD STATES ---
   const [showPassword, setShowPassword] = useState(false);
   const [passwordValidity, setPasswordValidity] = useState({
-    hasLength: false,
-    hasUpper: false,
-    hasLower: false,
-    hasNumber: false,
-    hasSpecial: false,
+    hasLength: false, hasUpper: false, hasLower: false, hasNumber: false, hasSpecial: false,
   });
 
-  // --- Initialization ---
+  // --- 1. SET MANAGE PERMISSION (SUPER ADMIN ONLY) ---
   useEffect(() => {
     if (isOpen) {
       fetchOptions();
       if (user) {
-        const isSuper = user.is_super_admin === true;
-        const isAdmin = user.is_admin === true || isSuper;
-        setCanManageOptions(isAdmin);
+        const role = (user.role || '').toLowerCase();
+        const isSuper = !!user.is_super_admin || role === 'super admin' || role === 'principal';
+        setCanManageOptions(isSuper);
       }
     }
   }, [isOpen, user]);
 
-  // --- NEW: PASSWORD CHECKER LOGIC ---
+  // --- 2. DEFINE STRICT HIERARCHY LEVELS ---
+  const getAccessLevels = () => {
+    if (!user) return [];
+    
+    const role = (user.role || '').toLowerCase();
+    const isSuper = !!user.is_super_admin || role === 'super admin';
+    const isAdmin = !!user.is_admin || role === 'admin';
+    const isAdvisor = !!user.is_adviser || role === 'adviser' || role === 'advisor';
+
+    if (isSuper) return ['Admin'];
+    if (isAdmin) return ['Advisor'];
+    if (isAdvisor) return ['Student'];
+
+    return [];
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+        const levels = getAccessLevels();
+        if (levels.length === 1) {
+            setAccessLevel(levels[0]);
+        }
+    }
+  }, [isOpen, user]);
+
   useEffect(() => {
     const pwd = formData.password || '';
     setPasswordValidity({
@@ -79,24 +173,6 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
     }
   };
 
-  const getAccessLevels = () => {
-    if (!user) return [];
-    const levels = ['Student']; 
-
-    if (user.is_adviser) return levels; 
-
-    if (user.is_admin || user.is_super_admin) {
-        levels.push('Advisor');
-        levels.push('Admin');
-    }
-
-    if (user.is_super_admin) {
-        levels.push('Super Admin');
-    }
-
-    return levels;
-  };
-
   const shouldShowStrand = () => ['Grade 11', 'Grade 12'].includes(yearLevel);
 
   const handleSubmit = async (e) => {
@@ -104,7 +180,6 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
     setLoading(true);
     setError('');
 
-    // Optional: Block submission if password requirements aren't met
     const allValid = Object.values(passwordValidity).every(Boolean);
     if (!allValid) {
         setError("Password does not meet complexity requirements.");
@@ -113,7 +188,6 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
     }
 
     const finalStrand = shouldShowStrand() ? strand : '';
-
     const payload = {
       ...formData,
       role: roleTitle,       
@@ -147,83 +221,11 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  // --- Manageable Select Component ---
-  const ManageableSelect = ({ label, type, value, setValue, list, canManage }) => {
-    const [isManaging, setIsManaging] = useState(false);
-    const [newItem, setNewItem] = useState('');
-
-    const handleAdd = async () => {
-      if (!newItem) return;
-      try {
-        await addFormOption(type, newItem);
-        await fetchOptions(); 
-        setNewItem('');
-      } catch (err) {
-        alert("Failed to add option. It might already exist.");
-      }
-    };
-
-    const handleDelete = async (item) => {
-      if (!window.confirm(`Delete ${item}?`)) return;
-      try {
-        await deleteFormOption(type, item);
-        await fetchOptions();
-        if (value === item) setValue('');
-      } catch (err) {
-        alert("Failed to delete option");
-      }
-    };
-
-    return (
-      <div className="mb-4">
-        <div className="flex justify-between items-center mb-1">
-          <label className="block text-sm font-medium text-gray-700">{label}</label>
-          {canManage && (
-            <button type="button" onClick={() => setIsManaging(!isManaging)} className="text-xs text-blue-600 underline hover:text-blue-800 font-semibold cursor-pointer">
-              {isManaging ? 'Done' : '⚙️ Manage'}
-            </button>
-          )}
-        </div>
-
-        {isManaging ? (
-          <div className="bg-gray-50 p-2 rounded border border-gray-200 animate-fade-in">
-            <div className="flex gap-2 mb-2">
-              <input value={newItem} onChange={(e) => setNewItem(e.target.value)} className="flex-1 px-2 py-1 text-sm border rounded" placeholder={`New ${label}...`} />
-              <button type="button" onClick={handleAdd} className="bg-blue-600 text-white px-2 rounded text-sm hover:bg-blue-700">Add</button>
-            </div>
-            <ul className="max-h-24 overflow-y-auto">
-              {list.map(item => (
-                <li key={item} className="flex justify-between text-xs py-1 border-b last:border-0 items-center">
-                  <span>{item}</span>
-                  <button type="button" onClick={() => handleDelete(item)} className="text-red-500 hover:text-red-700 font-bold px-1">✕</button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <select value={value} onChange={(e) => setValue(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white" required>
-            <option value="">Select {label}...</option>
-            {list.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
-        )}
-      </div>
-    );
-  };
-
-  // --- Password Requirement Item Helper ---
-  const RequirementItem = ({ met, text }) => (
-    <li className={`flex items-center gap-2 text-xs ${met ? 'text-emerald-600 font-medium' : 'text-slate-400'}`}>
-      <span className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] ${met ? 'bg-emerald-100' : 'bg-slate-100'}`}>
-        {met ? '✓' : '•'}
-      </span>
-      {text}
-    </li>
-  );
-
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm animate-fade-in">
+    // 👇 UPDATED BACKGROUND HERE (bg-slate-900/50)
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
           <h2 className="text-xl font-bold text-gray-800">Create New User</h2>
@@ -246,21 +248,21 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
           
           <div>
-             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                 {accessLevel === 'Student' ? 'Student ID' : 'Admin/Faculty ID'}
-             </label>
-             <input name="schoolId" required value={formData.schoolId} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+              </label>
+              <input name="schoolId" required value={formData.schoolId} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
 
           <div>
-             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email Address</label>
-             <input name="email" type="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email Address</label>
+              <input name="email" type="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
 
-          {/* --- UPDATED PASSWORD FIELD --- */}
+          {/* Password Field */}
           <div>
-             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Temporary Password</label>
-             <div className="relative">
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Temporary Password</label>
+              <div className="relative">
                <input 
                   name="password" 
                   type={showPassword ? "text" : "password"} 
@@ -274,16 +276,15 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                >
-                 {showPassword ? (
-                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                 ) : (
-                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                 )}
+                  {showPassword ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                  )}
                </button>
-             </div>
+              </div>
 
-             {/* Password Requirements List */}
-             <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
                 <p className="text-[10px] uppercase font-bold text-gray-400 mb-2">Requirements:</p>
                 <ul className="grid grid-cols-2 gap-1">
                   <RequirementItem met={passwordValidity.hasLength} text="8+ Characters" />
@@ -292,7 +293,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
                   <RequirementItem met={passwordValidity.hasNumber} text="Number (0-9)" />
                   <RequirementItem met={passwordValidity.hasSpecial} text="Special Character (!@#...)" />
                 </ul>
-             </div>
+              </div>
           </div>
 
           <hr className="border-gray-100 my-2" />
@@ -304,29 +305,31 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
             setValue={setRoleTitle} 
             list={options.roles} 
             canManage={canManageOptions} 
+            fetchOptions={fetchOptions}
           />
 
           <div>
-             <label className="block text-sm font-medium text-gray-700 mb-1">System Permissions</label>
-             <select 
+              <label className="block text-sm font-medium text-gray-700 mb-1">System Permissions</label>
+              <select 
                 value={accessLevel} 
                 onChange={(e) => setAccessLevel(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
                 required
-             >
-                <option value="">Select Access Level...</option>
+              >
+                {/* Ensure a default value showing if no selection */}
+                {getAccessLevels().length > 1 && <option value="">Select Access Level...</option>}
+                
                 {getAccessLevels().map(level => (
                     <option key={level} value={level}>{level}</option>
                 ))}
-             </select>
-             <p className="text-xs text-gray-400 mt-1">This determines what the user can do in the system.</p>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">This determines what the user can do in the system.</p>
           </div>
 
           {accessLevel === 'Student' && (
             <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 animate-slide-down mt-4">
               <h3 className="text-blue-800 font-semibold text-sm mb-3 flex items-center gap-2">🎓 Student Academic Details</h3>
-              
-              <ManageableSelect label="Year Level" type="yearLevel" value={yearLevel} setValue={setYearLevel} list={options.yearLevels} canManage={canManageOptions} />
+              <ManageableSelect label="Year Level" type="yearLevel" value={yearLevel} setValue={setYearLevel} list={options.yearLevels} canManage={canManageOptions} fetchOptions={fetchOptions} />
               
               <div className="mb-4">
                  <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
@@ -335,7 +338,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
               {shouldShowStrand() && (
                 <div className="animate-fade-in">
-                  <ManageableSelect label="Strand / Track" type="strand" value={strand} setValue={setStrand} list={options.strands} canManage={canManageOptions} />
+                  <ManageableSelect label="Strand / Track" type="strand" value={strand} setValue={setStrand} list={options.strands} canManage={canManageOptions} fetchOptions={fetchOptions} />
                 </div>
               )}
             </div>

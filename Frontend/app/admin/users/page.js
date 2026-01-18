@@ -7,11 +7,15 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../context/AuthContext';
 import api, { getAllUsers, adminDeleteUser, getFormOptions } from '../../../services/apiService';
 
-// --- Reusable Confirmation Modal (High Z-Index for overlays) ---
+// Import the component we fixed
+import CreateUserModal from '../../../components/CreateUserModal'; 
+
+// --- Reusable Confirmation Modal ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+    // 👇 UPDATED BACKGROUND
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in border border-gray-100">
         <div className="p-6 text-center">
           <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
@@ -35,9 +39,9 @@ export default function ManageUsersPage() {
   // --- STATE ---
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [options, setOptions] = useState({ yearLevels: [], strands: [] });
   const [loading, setLoading] = useState(true);
   
+  // Modal States
   const [showUserModal, setShowUserModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
@@ -50,7 +54,7 @@ export default function ManageUsersPage() {
   // General Confirmation Modal State
   const [confirmConfig, setConfirmConfig] = useState({ 
     isOpen: false, 
-    action: null, // 'deleteGroup' | 'removeMember'
+    action: null, 
     data: null, 
     title: '', 
     message: '' 
@@ -60,12 +64,7 @@ export default function ManageUsersPage() {
   const [groupMembers, setGroupMembers] = useState([]);
   const [selectedStudentToAdd, setSelectedStudentToAdd] = useState('');
 
-  // Form Data
-  const [newUser, setNewUser] = useState({
-    firstName: '', lastName: '', email: '', password: '', 
-    role: 'student', schoolId: '', accessLevel: '', groupId: '',
-    yearLevel: '', strand: '', section: ''
-  });
+  // Group Form Data
   const [newGroup, setNewGroup] = useState({ name: '' });
 
   // --- PERMISSIONS ---
@@ -88,14 +87,6 @@ export default function ManageUsersPage() {
          groupList = groupsRes.data;
       } catch (e) { console.warn("Groups endpoint not ready"); }
 
-      try {
-        const { data } = await getFormOptions();
-        setOptions({
-          yearLevels: data.yearLevels || [],
-          strands: data.strands || []
-        });
-      } catch (e) { console.error("Failed to fetch options"); }
-
       setUsers(activeUsers);
       setGroups(groupList);
     } catch (err) {
@@ -112,15 +103,36 @@ export default function ManageUsersPage() {
         router.push('/'); 
       } else {
         fetchData();
-        if (isSuperAdmin) setNewUser(prev => ({...prev, accessLevel: 'Admin'}));
-        else if (isAdmin) setNewUser(prev => ({...prev, accessLevel: 'Advisor'}));
-        else if (isAdvisor) setNewUser(prev => ({...prev, accessLevel: 'Student'}));
       }
     }
-  }, [authLoading, isPrivileged, isSuperAdmin, isAdmin, isAdvisor]);
+  }, [authLoading, isPrivileged]);
+
+  // --- HELPER: GET ROLE BADGE COLOR ---
+  const getRoleBadge = (u) => {
+    let roleName = 'Student';
+    let style = 'bg-slate-100 text-slate-600 border border-slate-200';
+
+    if (u.is_super_admin) {
+      roleName = 'Super Admin';
+      style = 'bg-purple-100 text-purple-700 border border-purple-200';
+    } 
+    else if (u.is_admin) {
+      roleName = 'Admin';
+      style = 'bg-indigo-100 text-indigo-700 border border-indigo-200';
+    } 
+    else if (u.is_adviser) {
+      roleName = 'Advisor';
+      style = 'bg-emerald-100 text-emerald-700 border border-emerald-200';
+    }
+
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${style}`}>
+        {roleName}
+      </span>
+    );
+  };
 
   // --- CONFIRMATION HANDLERS ---
-  
   const promptDeleteGroup = (groupId, groupName) => {
     setConfirmConfig({
       isOpen: true,
@@ -165,35 +177,6 @@ export default function ManageUsersPage() {
   };
 
   // --- OTHER HANDLERS ---
-  const handleCreateUser = async (e) => {
-    e.preventDefault();
-    try {
-      const payload = { 
-        ...newUser,
-        studentProfile: (newUser.accessLevel === 'Student' || isAdvisor) ? {
-            yearLevel: newUser.yearLevel,
-            strand: newUser.strand,
-            section: newUser.section
-        } : undefined
-      };
-
-      if (isAdvisor) {
-          payload.role = 'student';
-          payload.accessLevel = 'Student';
-      } else {
-          payload.role = newUser.accessLevel === 'Advisor' ? 'adviser' : newUser.accessLevel.toLowerCase();
-      }
-
-      await api.post('/admin/users', payload);
-      toast.success("User created successfully!");
-      setShowUserModal(false);
-      setNewUser({ firstName: '', lastName: '', email: '', password: '', role: 'student', schoolId: '', accessLevel: '', groupId: '', yearLevel: '', strand: '', section: '' });
-      fetchData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to create user.");
-    }
-  };
-
   const openMembersModal = async (group) => {
     setSelectedGroup(group);
     setShowMembersModal(true);
@@ -254,8 +237,7 @@ export default function ManageUsersPage() {
 
   if (authLoading || loading) return <div className="p-10 text-center">Loading...</div>;
 
-  const availableStudents = users.filter(u => u.role === 'student');
-  const shouldShowStrand = ['Grade 11', 'Grade 12'].includes(newUser.yearLevel);
+  const availableStudents = users.filter(u => !u.is_admin && !u.is_super_admin && !u.is_adviser);
 
   return (
     <div className="space-y-6 pb-24">
@@ -278,6 +260,7 @@ export default function ManageUsersPage() {
              </Link>
            )}
            <button onClick={() => setShowGroupModal(true)} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition">+ New Group</button>
+           
            <button onClick={() => setShowUserModal(true)} className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-sm">
              {isAdvisor ? '+ Add Student' : '+ Add User'}
            </button>
@@ -301,14 +284,8 @@ export default function ManageUsersPage() {
                 <td className="px-6 py-4 font-medium text-slate-900">{u.first_name} {u.last_name}</td>
                 <td className="px-6 py-4 text-slate-600">{u.email}</td>
                 <td className="px-6 py-4">
-                  {/* Restored Color Coding Logic */}
-                  <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${
-                    u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' :
-                    u.role === 'adviser' ? 'bg-emerald-100 text-emerald-700' :
-                    'bg-slate-100 text-slate-600'
-                  }`}>
-                    {u.role || 'Student'}
-                  </span>
+                  {/* HELPER FUNCTION */}
+                  {getRoleBadge(u)}
                 </td>
                 <td className="px-6 py-4">
                     {isAdmin && <button onClick={() => initiateArchive(u)} className="text-red-500 hover:text-red-700 font-medium">Archive</button>}
@@ -353,21 +330,20 @@ export default function ManageUsersPage() {
         confirmText="Yes, Proceed"
       />
 
-      {/* --- ARCHIVE USER MODAL (Has Text Input) --- */}
+      {/* ARCHIVE USER MODAL */}
       {showArchiveModal && userToArchive && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        // 👇 UPDATED BACKGROUND
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
             <div className="p-6 border-b border-gray-100 bg-red-50 flex justify-between items-center">
                <h3 className="text-lg font-bold text-red-800">Archive User</h3>
                <button onClick={() => setShowArchiveModal(false)} className="text-red-400 hover:text-red-600 font-bold">✕</button>
             </div>
-            
             <form onSubmit={handleConfirmArchive} className="p-6 space-y-4">
                <p className="text-slate-600 text-sm">
                  Are you sure you want to archive <strong>{userToArchive.first_name} {userToArchive.last_name}</strong>?
                  They will no longer be able to log in.
                </p>
-
                <div>
                  <label className="block text-sm font-bold text-slate-700 mb-1">Reason for Archiving</label>
                  <textarea 
@@ -379,7 +355,6 @@ export default function ManageUsersPage() {
                    onChange={(e) => setArchiveReason(e.target.value)}
                  ></textarea>
                </div>
-
                <div className="flex gap-3 justify-end pt-2">
                  <button type="button" onClick={() => setShowArchiveModal(false)} className="px-4 py-2 text-slate-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium">Cancel</button>
                  <button type="submit" className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700">Archive User</button>
@@ -389,9 +364,10 @@ export default function ManageUsersPage() {
         </div>
       )}
 
-      {/* MODAL: MANAGE GROUP MEMBERS */}
+      {/* MANAGE GROUP MEMBERS MODAL */}
       {showMembersModal && selectedGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        // 👇 UPDATED BACKGROUND
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
                    <div><h3 className="text-xl font-bold text-slate-800">Manage Members</h3><p className="text-sm text-slate-500">Group: {selectedGroup.name}</p></div>
@@ -434,88 +410,10 @@ export default function ManageUsersPage() {
         </div>
       )}
 
-      {/* --- CREATE USER MODAL --- */}
-      {showUserModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-               <h3 className="text-xl font-bold text-slate-800">{isAdvisor ? 'Create Student Account' : 'Create New User'}</h3>
-               <button onClick={() => setShowUserModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
-            </div>
-            
-            <form onSubmit={handleCreateUser} className="p-6 space-y-4 overflow-y-auto">
-               <div className="grid grid-cols-2 gap-4">
-                 <div><label className="block text-sm font-bold text-slate-700 mb-1">First Name</label><input required className="w-full p-2 border rounded-lg" value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} /></div>
-                 <div><label className="block text-sm font-bold text-slate-700 mb-1">Last Name</label><input required className="w-full p-2 border rounded-lg" value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} /></div>
-               </div>
-
-               <div><label className="block text-sm font-bold text-slate-700 mb-1">Email</label><input required type="email" className="w-full p-2 border rounded-lg" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} /></div>
-               <div><label className="block text-sm font-bold text-slate-700 mb-1">School ID</label><input required className="w-full p-2 border rounded-lg" value={newUser.schoolId} onChange={e => setNewUser({...newUser, schoolId: e.target.value})} /></div>
-
-               {!isAdvisor && (
-                   <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">Select Role to Create</label>
-                      <select 
-                        required 
-                        className="w-full p-2 border rounded-lg" 
-                        value={newUser.accessLevel} 
-                        onChange={e => setNewUser({...newUser, accessLevel: e.target.value})}
-                      >
-                        <option value="">-- Choose Role --</option>
-                        {isSuperAdmin && <option value="Admin">Admin</option>}
-                        {(isAdmin && !isSuperAdmin) && <option value="Advisor">Advisor</option>}
-                      </select>
-                   </div>
-               )}
-
-               {(newUser.accessLevel === 'Student' || isAdvisor) && (
-                   <div className="bg-blue-50 p-4 rounded-xl space-y-4 border border-blue-100 mt-4">
-                      <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">🎓 Academic Details</p>
-                      
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Year Level</label>
-                        <select required className="w-full p-2 border rounded-lg bg-white" value={newUser.yearLevel} onChange={e => setNewUser({...newUser, yearLevel: e.target.value})}>
-                            <option value="">Select Year Level...</option>
-                            {options.yearLevels.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Section</label>
-                        <input required className="w-full p-2 border rounded-lg bg-white" placeholder="e.g. St. Thomas" value={newUser.section} onChange={e => setNewUser({...newUser, section: e.target.value})} />
-                      </div>
-
-                      {shouldShowStrand && (
-                        <div className="animate-fade-in">
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Strand / Track</label>
-                            <select required className="w-full p-2 border rounded-lg bg-white" value={newUser.strand} onChange={e => setNewUser({...newUser, strand: e.target.value})}>
-                                <option value="">Select Strand...</option>
-                                {options.strands.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                            </select>
-                        </div>
-                      )}
-
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Assign to Group (Optional)</label>
-                        <select className="w-full p-2 border rounded-lg bg-white" value={newUser.groupId} onChange={e => setNewUser({...newUser, groupId: e.target.value})}>
-                            <option value="">-- No Group --</option>
-                            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                        </select>
-                      </div>
-                   </div>
-               )}
-
-               <div><label className="block text-sm font-bold text-slate-700 mb-1">Temporary Password</label><input required type="password" className="w-full p-2 border rounded-lg" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} /></div>
-
-               <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">Create Account</button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* CREATE GROUP MODAL */}
       {showGroupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
+        // 👇 UPDATED BACKGROUND
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
                <h3 className="text-xl font-bold text-slate-800">Create Research Group</h3>
@@ -528,6 +426,16 @@ export default function ManageUsersPage() {
           </div>
         </div>
       )}
+
+      {/* CREATE USER MODAL (External Component) */}
+      <CreateUserModal 
+        isOpen={showUserModal} 
+        onClose={() => setShowUserModal(false)} 
+        onSuccess={() => {
+            toast.success("User created successfully!");
+            fetchData();
+        }}
+      />
 
     </div>
   );
