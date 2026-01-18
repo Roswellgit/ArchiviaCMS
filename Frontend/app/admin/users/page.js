@@ -301,6 +301,7 @@ export default function ManageUsersPage() {
                 <td className="px-6 py-4 font-medium text-slate-900">{u.first_name} {u.last_name}</td>
                 <td className="px-6 py-4 text-slate-600">{u.email}</td>
                 <td className="px-6 py-4">
+                  {/* Restored Color Coding Logic */}
                   <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${
                     u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' :
                     u.role === 'adviser' ? 'bg-emerald-100 text-emerald-700' :

@@ -15,27 +15,6 @@ import {
 import { useAuth } from '../../../context/AuthContext'; 
 import { toast } from 'react-hot-toast';
 
-// --- Reusable Confirmation Modal ---
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in border border-gray-100">
-        <div className="p-6 text-center">
-          <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
-          <p className="text-slate-600 text-sm mb-6">{message}</p>
-          <div className="flex gap-3 justify-center">
-            <button onClick={onClose} className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition">Cancel</button>
-            <button onClick={onConfirm} className={`px-4 py-2 text-white font-bold rounded-lg shadow-md transition ${isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-              {confirmText || 'Confirm'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export default function AdminDocumentManagement() {
   const [documents, setDocuments] = useState([]);
   const [pendingDocs, setPendingDocs] = useState([]); 
@@ -50,13 +29,10 @@ export default function AdminDocumentManagement() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
 
-  // Archive Modal State
+  // Archive Modal State (Only used for Archive because it needs a reason input)
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [docToArchive, setDocToArchive] = useState(null);
   const [archiveReason, setArchiveReason] = useState('');
-
-  // Confirmation Modal State
-  const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, type: '', id: null });
   
   const { user } = useAuth(); 
 
@@ -96,6 +72,21 @@ export default function AdminDocumentManagement() {
     handleSearch(searchTerm);
   };
 
+  // --- HELPER: Format Authors ---
+  // Keeps the logic to shorten the list, but allows the text itself to wrap
+  const formatAuthors = (authors) => {
+    if (!authors) return 'Unknown Author';
+    if (typeof authors === 'string') return authors;
+    if (Array.isArray(authors)) {
+        if (authors.length === 0) return 'Unknown Author';
+        if (authors.length > 2) {
+            return `${authors[0]}, ${authors[1]} et al.`;
+        }
+        return authors.join(', ');
+    }
+    return 'Unknown Author';
+  };
+
   // --- ACTIONS ---
 
   const handleApprove = async (docId) => {
@@ -109,34 +100,35 @@ export default function AdminDocumentManagement() {
     }
   };
 
-  // --- CONFIRMATION HANDLERS ---
-  const initiateConfirm = (type, id) => {
-    setConfirmConfig({ isOpen: true, type, id });
+  // --- TOAST CONFIRMATION FOR REJECT ---
+  const handleReject = (docId) => {
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p className="font-bold text-slate-800 text-sm">Reject this document?</p>
+        <p className="text-xs text-slate-500">It will be hidden from the public.</p>
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
+          <button onClick={() => {
+             executeReject(docId);
+             toast.dismiss(t.id);
+          }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Confirm Reject</button>
+        </div>
+      </div>
+    ), { duration: Infinity, position: 'top-center', icon: '🚫' }); 
   };
 
-  const executeConfirmation = async () => {
-    const { type, id } = confirmConfig;
-    if (!id) return;
-    setConfirmConfig({ ...confirmConfig, isOpen: false }); // Close modal immediately
-
+  const executeReject = async (docId) => {
     try {
-        if (type === 'reject') {
-            await rejectDocument(id);
-            toast.success("Document Rejected.");
-        } else if (type === 'restore') {
-            await adminRestoreDocument(id);
-            toast.success("Document restored.");
-        } else if (type === 'delete') {
-            await adminDeleteDocument(id);
-            toast.success("Document permanently deleted.");
-        }
-        refreshData();
+      await rejectDocument(docId);
+      toast.success("Document Rejected.");
+      fetchPendingQueue();
     } catch (err) {
-        toast.error(`Action failed: ${err.message || 'Unknown error'}`);
+      console.error(err);
+      toast.error("Rejection failed.");
     }
   };
 
-  // --- ARCHIVE HANDLERS ---
+  // --- ARCHIVE LOGIC (Modal required for input) ---
   const openArchiveModal = (doc) => {
     setDocToArchive(doc);
     setArchiveReason('');
@@ -156,7 +148,43 @@ export default function AdminDocumentManagement() {
         refreshData();
     } catch (err) { 
         toast.error("Failed to archive."); 
+        console.error(err);
     }
+  };
+
+  const handleRestore = async (docId) => {
+    try {
+        await adminRestoreDocument(docId);
+        toast.success("Document restored.");
+        refreshData();
+    } catch (err) {
+        toast.error("Restore failed.");
+    }
+  };
+
+  // --- TOAST CONFIRMATION FOR DELETE ---
+  const handlePermanentDelete = (docId) => {
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p className="font-bold text-slate-800 text-sm">Permanently delete?</p>
+        <p className="text-xs text-slate-500">This action cannot be undone.</p>
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
+          <button onClick={() => {
+             executeDelete(docId);
+             toast.dismiss(t.id);
+          }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Delete</button>
+        </div>
+      </div>
+    ), { duration: Infinity, position: 'top-center', icon: '⚠️' }); 
+  };
+
+  const executeDelete = async (docId) => {
+    try {
+        await adminDeleteDocument(docId);
+        toast.success("Document deleted.");
+        refreshData();
+    } catch (err) { toast.error("Delete failed."); }
   };
 
   const handleEdit = (doc) => { setSelectedDocument(doc); setIsEditModalOpen(true); };
@@ -193,15 +221,16 @@ export default function AdminDocumentManagement() {
   const totalPages = Math.ceil(listToRender.length / itemsPerPage);
 
   return (
-    <div className="space-y-6 pb-24">
-      {/* Header & Tabs */}
-      <div className="flex flex-col md:flex-row justify-between items-end border-b border-slate-200 pb-4 gap-4">
-          <div>
+    <div className="space-y-6 pb-24 max-w-7xl mx-auto">
+      
+      {/* HEADER: Centered Alignment */}
+      <div className="flex flex-col md:flex-row justify-between items-center border-b border-slate-200 pb-4 gap-4">
+          <div className="w-full md:w-auto text-center md:text-left">
             <h2 className="text-3xl font-extrabold text-slate-900">Documents</h2>
             <p className="text-slate-500 text-sm mt-1">Manage repository content</p>
           </div>
           
-          <div className="flex bg-slate-100 p-1 rounded-lg">
+          <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
               <button 
                 onClick={() => { setCurrentTab('active'); setCurrentPage(1); }}
                 className={`px-4 py-1.5 text-sm font-bold rounded-md transition-all ${currentTab === 'active' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
@@ -252,33 +281,44 @@ export default function AdminDocumentManagement() {
             <div className="grid gap-4">
             {currentItems.map(doc => (
                 <div key={doc.id} className="p-5 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-3">
-                            <span className="truncate">{doc.title || "Untitled"}</span>
+                    
+                    {/* FIX: 
+                       1. 'flex-1 min-w-0' ensures the text container shrinks to available space.
+                       2. Removed 'truncate' from children so they wrap.
+                       3. Added 'break-words' to force wrapping on long strings.
+                    */}
+                    <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <h3 className="text-lg font-bold text-slate-800 break-words leading-tight">
+                                {doc.title || "Untitled"}
+                            </h3>
+                            
+                            {/* Badges */}
                             {doc.deletion_requested && <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase shrink-0">Deletion Requested</span>}
                             {currentTab === 'pending' && <span className="bg-yellow-100 text-yellow-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase shrink-0">Pending</span>}
-                        </h3>
+                        </div>
                         
                         {currentTab === 'archived' && doc.archive_reason && (
-                            <p className="text-xs text-orange-600 font-medium mt-1">Reason: {doc.archive_reason}</p>
+                            <p className="text-xs text-orange-600 font-medium break-words bg-orange-50 p-1 rounded border border-orange-100 inline-block">Reason: {doc.archive_reason}</p>
                         )}
                         
-                        <p className="text-sm text-slate-500 mt-1 truncate">
-                            {doc.ai_authors?.length > 0 ? doc.ai_authors.join(', ') : 'Unknown Author'} • {doc.ai_date_created || 'No Date'}
+                        <p className="text-sm text-slate-500 break-words">
+                            {formatAuthors(doc.ai_authors)} • {doc.ai_date_created || 'No Date'}
                         </p>
                         
-                        <a href={doc.downloadLink || doc.file_url || '#'} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline mt-2 inline-block">
+                        <a href={doc.downloadLink || doc.file_url || '#'} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline inline-block font-medium">
                            View PDF
                         </a>
                     </div>
                     
-                    <div className="flex gap-3 items-center shrink-0">
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 items-center shrink-0 w-full md:w-auto mt-2 md:mt-0">
                         {currentTab === 'pending' ? (
                            <>
-                             <button onClick={() => handleApprove(doc.id)} className="px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 shadow-sm transition">
+                             <button onClick={() => handleApprove(doc.id)} className="flex-1 md:flex-none px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 shadow-sm transition">
                                Approve
                              </button>
-                             <button onClick={() => initiateConfirm('reject', doc.id)} className="px-4 py-2 bg-white border border-red-200 text-red-600 text-sm font-bold rounded-lg hover:bg-red-50 shadow-sm transition">
+                             <button onClick={() => handleReject(doc.id)} className="flex-1 md:flex-none px-4 py-2 bg-white border border-red-200 text-red-600 text-sm font-bold rounded-lg hover:bg-red-50 shadow-sm transition">
                                Reject
                              </button>
                            </>
@@ -288,22 +328,22 @@ export default function AdminDocumentManagement() {
                                   <button onClick={() => handleEdit(doc)} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">Edit</button>
                               )}
                               
-                              {(currentTab === 'active' && user?.is_super_admin) && <div className="h-4 w-px bg-slate-200"></div>}
+                              {(currentTab === 'active' && user?.is_super_admin) && <div className="hidden md:block h-4 w-px bg-slate-200"></div>}
                               
                               {currentTab === 'active' ? (
                                     <button onClick={() => openArchiveModal(doc)} className="text-sm font-semibold text-slate-500 hover:text-orange-600">
                                       Archive
                                     </button>
                               ) : (
-                                    <button onClick={() => initiateConfirm('restore', doc.id)} className="text-sm font-semibold text-green-600 hover:text-green-800">
+                                    <button onClick={() => handleRestore(doc.id)} className="text-sm font-semibold text-green-600 hover:text-green-800">
                                       Restore
                                     </button>
                               )}
                               
                               {user?.is_super_admin && (
                                   <>
-                                      <div className="h-4 w-px bg-slate-200"></div>
-                                      <button onClick={() => initiateConfirm('delete', doc.id)} className="text-sm font-semibold text-red-600 hover:text-red-800">
+                                      <div className="hidden md:block h-4 w-px bg-slate-200"></div>
+                                      <button onClick={() => handlePermanentDelete(doc.id)} className="text-sm font-semibold text-red-600 hover:text-red-800">
                                         Delete
                                       </button>
                                   </>
@@ -375,29 +415,6 @@ export default function AdminDocumentManagement() {
           </div>
         </div>
       )}
-
-      {/* CONFIRMATION MODAL */}
-      <ConfirmationModal 
-        isOpen={confirmConfig.isOpen}
-        onClose={() => setConfirmConfig({...confirmConfig, isOpen: false})}
-        onConfirm={executeConfirmation}
-        title={
-          confirmConfig.type === 'reject' ? 'Reject Document?' : 
-          confirmConfig.type === 'restore' ? 'Restore Document?' : 
-          'Delete Permanently?'
-        }
-        message={
-          confirmConfig.type === 'reject' ? 'It will be hidden from the public queue.' :
-          confirmConfig.type === 'restore' ? 'This document will be visible in the library again.' :
-          'This action cannot be undone.'
-        }
-        confirmText={
-          confirmConfig.type === 'reject' ? 'Reject' : 
-          confirmConfig.type === 'restore' ? 'Restore' : 
-          'Delete'
-        }
-        isDanger={confirmConfig.type === 'reject' || confirmConfig.type === 'delete'}
-      />
     </div>
   );
 }
