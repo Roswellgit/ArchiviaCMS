@@ -11,14 +11,15 @@ import {
   getAdminAnalytics, 
   getPendingDocuments, approveDocument, rejectDocument,
   getDocArchiveRequests, approveDocArchive, rejectDocArchive,
-  getUserArchiveRequests, approveUserArchive, rejectUserArchive
+  getUserArchiveRequests, approveUserArchive, rejectUserArchive,
+  getDeletionRequests, approveDeletion, rejectDeletion 
 } from '../../services/apiService';
 
 // --- HELPER: CONFIRMATION MODAL ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in">
         <div className="p-6 text-center">
           <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
@@ -37,7 +38,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
 
 // --- HELPER COMPONENT: REQUEST TABLE ---
 const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon }) => (
-  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col w-full">
+  <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col w-full h-full">
     {/* Header */}
     <div className={`px-6 py-4 border-b border-slate-50 ${colorClass} bg-opacity-5 flex justify-between items-center`}>
        <div className="flex items-center gap-2">
@@ -50,7 +51,7 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
     </div>
     
     {/* Table Body */}
-    <div className="overflow-y-auto max-h-[350px]">
+    <div className="overflow-y-auto max-h-[300px] flex-grow">
       <table className="w-full text-left text-sm">
         <tbody className="divide-y divide-slate-50">
           {items.length === 0 ? (
@@ -58,31 +59,45 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
               <td className="py-10 italic">{emptyMsg}</td>
             </tr>
           ) : (
-            items.map(item => (
-              <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
-                <td className="p-4 align-top">
-                   <p className="font-bold text-slate-700 block mb-1">
-                      {item.title || `${item.first_name} ${item.last_name}`}
-                   </p>
-                   {item.author_name && <p className="text-xs text-slate-400">By: {item.author_name}</p>}
-                   {item.archive_reason && <p className="text-xs text-slate-500 italic bg-slate-50 p-1 rounded mt-1 border border-slate-100 inline-block">"{item.archive_reason}"</p>}
-                </td>
-                <td className="p-4 text-right align-top space-x-2 w-[160px]">
-                   <button 
-                      onClick={() => onAction(type, item.id, 'approve')} 
-                      className="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-emerald-600 transition-colors shadow-sm"
-                   >
-                      Approve
-                   </button>
-                   <button 
-                      onClick={() => onAction(type, item.id, 'reject')} 
-                      className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
-                   >
-                      Reject
-                   </button>
-                </td>
-              </tr>
-            ))
+            items.map(item => {
+              // 👇 ROBUST REASON CHECKER: Checks multiple possible field names
+              const reasonText = item.reason || item.archive_reason || item.deletion_reason || item.request_reason;
+
+              return (
+                <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
+                  <td className="p-4 align-top">
+                      <p className="font-bold text-slate-700 block mb-1">
+                        {item.title || `${item.first_name} ${item.last_name}`}
+                      </p>
+                      {item.author_name && <p className="text-xs text-slate-400">By: {item.author_name}</p>}
+                      
+                      {/* Render Reason if found */}
+                      {reasonText && (
+                        <p className="text-xs text-slate-500 italic bg-slate-50 p-1 rounded mt-1 border border-slate-100 inline-block">
+                          "{reasonText}"
+                        </p>
+                      )}
+                  </td>
+                  {/* Buttons aligned to the right */}
+                  <td className="p-4 align-top w-[180px]">
+                      <div className="flex justify-end gap-2">
+                          <button 
+                            onClick={() => onAction(type, item.id, 'approve')} 
+                            className="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-emerald-600 transition-colors shadow-sm"
+                          >
+                            Approve
+                          </button>
+                          <button 
+                            onClick={() => onAction(type, item.id, 'reject')} 
+                            className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
+                          >
+                            Reject
+                          </button>
+                      </div>
+                  </td>
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>
@@ -99,6 +114,7 @@ export default function AdminDashboardPage() {
   const [pendingUploads, setPendingUploads] = useState([]);
   const [docArchives, setDocArchives] = useState([]);
   const [userArchives, setUserArchives] = useState([]);
+  const [deletionRequests, setDeletionRequests] = useState([]);
 
   // Modal State
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, type: '', id: null, action: '' });
@@ -120,13 +136,13 @@ export default function AdminDashboardPage() {
 
       // 2. Fetch Lists (Only if Admin)
       if (isAdmin) {
-        // Everyone (Admins) fetches Pending Documents
         getPendingDocuments().then(res => setPendingUploads(res.data || res)).catch(e => console.error("Uploads error", e));
         
-        // ✅ UPDATE: Only fetch Archive requests if Super Admin
+        // Only Super Admin fetches Archives & Deletions
         if (isSuperAdmin) {
             getDocArchiveRequests().then(res => setDocArchives(res.data || res)).catch(e => console.error("Doc Archive error", e));
             getUserArchiveRequests().then(res => setUserArchives(res.data || res)).catch(e => console.error("User Archive error", e));
+            getDeletionRequests().then(res => setDeletionRequests(res.data || res)).catch(e => console.error("Deletion requests error", e));
         }
       }
     } catch (err) {
@@ -143,7 +159,6 @@ export default function AdminDashboardPage() {
   }, [user, authLoading, isPrivileged]);
 
   // --- ACTION HANDLERS ---
-  
   const initiateAction = (type, id, action) => {
       setConfirmConfig({ isOpen: true, type, id, action });
   };
@@ -159,6 +174,8 @@ export default function AdminDashboardPage() {
               action === 'approve' ? await approveDocArchive(id) : await rejectDocArchive(id);
           } else if (type === 'userArchive') {
               action === 'approve' ? await approveUserArchive(id) : await rejectUserArchive(id);
+          } else if (type === 'deletion') {
+              action === 'approve' ? await approveDeletion(id) : await rejectDeletion(id);
           }
           
           toast.success(`${action === 'approve' ? 'Approved' : 'Rejected'} successfully!`);
@@ -200,24 +217,20 @@ export default function AdminDashboardPage() {
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Tasks</p>
                     <h3 className="text-3xl font-extrabold text-orange-600 mt-2">
-                        {/* Only calculate relevant tasks based on role */}
                         {isSuperAdmin 
-                            ? pendingUploads.length + docArchives.length + userArchives.length 
+                            ? pendingUploads.length + docArchives.length + userArchives.length + deletionRequests.length
                             : pendingUploads.length
                         }
                     </h3>
                 </div>
             )}
             
-            {/* QUICK ACTIONS CARD */}
             <div className="bg-slate-900 p-5 rounded-2xl shadow-sm text-white flex flex-col justify-center gap-2">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Quick Actions</p>
-                
                 <Link href="/admin/users" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
                    <span className="font-bold text-sm">Manage Users</span>
                    <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
                 </Link>
-                
                 {isAdmin && (
                     <>
                         <div className="border-t border-white/10"></div>
@@ -231,16 +244,17 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* --- SECTION 2: SEPARATE PENDING MODULES --- */}
+      {/* --- SECTION 2: REQUEST GRID (2x2) --- */}
       {isAdmin && (
           <div className="space-y-6">
               <h3 className="text-2xl font-bold text-slate-800 border-l-4 border-indigo-600 pl-4">Pending Requests</h3>
               
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+              {/* 👇 2x2 GRID LAYOUT */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
                   
-                  {/* 1. DOCUMENT APPROVALS (Visible to all Admins) */}
-                  <div className={isSuperAdmin ? "xl:col-span-2" : "xl:col-span-2"}>
-                     <RequestTable 
+                  {/* 1. DOCUMENT APPROVALS (If not Super Admin, take full width) */}
+                  <div className={!isSuperAdmin ? "lg:col-span-2" : ""}>
+                      <RequestTable 
                         title="Document Approvals" 
                         items={pendingUploads} 
                         type="upload" 
@@ -251,30 +265,41 @@ export default function AdminDashboardPage() {
                       />
                   </div>
 
-                  {/* 2. DOCUMENT ARCHIVE REQUESTS (Super Admin Only) */}
                   {isSuperAdmin && (
-                    <RequestTable 
-                        title="Document Archive Requests" 
-                        items={docArchives} 
-                        type="docArchive" 
-                        onAction={initiateAction} 
-                        emptyMsg="No document archive requests."
-                        colorClass="text-orange-600"
-                        icon="📦"
-                    />
-                  )}
+                    <>
+                        {/* 2. DELETION REQUESTS */}
+                        <RequestTable 
+                            title="Document Deletion Requests" 
+                            items={deletionRequests} 
+                            type="deletion" 
+                            onAction={initiateAction} 
+                            emptyMsg="No pending deletion requests."
+                            colorClass="text-red-700"
+                            icon="🗑️"
+                        />
 
-                  {/* 3. USER ARCHIVE REQUESTS (Super Admin Only) */}
-                  {isSuperAdmin && (
-                    <RequestTable 
-                        title="User Archive Requests" 
-                        items={userArchives} 
-                        type="userArchive" 
-                        onAction={initiateAction} 
-                        emptyMsg="No user archive requests."
-                        colorClass="text-red-600"
-                        icon="👤"
-                    />
+                        {/* 3. DOCUMENT ARCHIVE REQUESTS */}
+                        <RequestTable 
+                            title="Document Archive Requests" 
+                            items={docArchives} 
+                            type="docArchive" 
+                            onAction={initiateAction} 
+                            emptyMsg="No document archive requests."
+                            colorClass="text-orange-600"
+                            icon="📦"
+                        />
+
+                        {/* 4. USER ARCHIVE REQUESTS */}
+                        <RequestTable 
+                            title="User Archive Requests" 
+                            items={userArchives} 
+                            type="userArchive" 
+                            onAction={initiateAction} 
+                            emptyMsg="No user archive requests."
+                            colorClass="text-rose-600"
+                            icon="👤"
+                        />
+                    </>
                   )}
               </div>
           </div>

@@ -78,7 +78,6 @@ export default function UserProfile() {
     setPwMessage({ type: '', text: '' });
 
     if (step === 1) {
-        // --- 2. VALIDATION LOGIC ADDED HERE ---
         const pwd = pwForm.newPassword;
         if (pwd !== pwForm.confirmPassword) {
             setPwMessage({ type: 'error', text: 'New passwords do not match.' });
@@ -97,7 +96,7 @@ export default function UserProfile() {
         const failedRule = rules.find(r => !r.test);
         if (failedRule) {
             setPwMessage({ type: 'error', text: failedRule.msg });
-            return; // STOP submission
+            return; 
         }
         
         setIsPwSaving(true);
@@ -139,9 +138,9 @@ export default function UserProfile() {
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Profile Header Card */}
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 flex flex-col md:flex-row items-center md:items-start gap-6">
-        <div className="w-24 h-24 rounded-full bg-slate-900 text-white flex items-center justify-center text-3xl font-bold uppercase shadow-lg shadow-slate-200">
-            {user.firstName ? user.firstName.charAt(0) : 'U'}
-        </div>
+        
+        {/* --- REMOVED: Circular Avatar Div was here --- */}
+
         <div className="flex-grow text-center md:text-left">
             <h2 className="text-3xl font-extrabold text-slate-900">{user.firstName} {user.lastName}</h2>
             <p className="text-slate-500 font-medium">{user.email}</p>
@@ -253,7 +252,7 @@ export default function UserProfile() {
                       </button>
                     </div>
                     
-                    {/* --- 3. CHECKLIST ADDED HERE --- */}
+                    {/* --- CHECKLIST --- */}
                     <PasswordRequirements password={pwForm.newPassword} />
                   </div>
 

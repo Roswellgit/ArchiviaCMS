@@ -40,8 +40,31 @@ const KeywordCloud = ({ keywords }) => {
           key={idx}
           className={`px-3 py-1 text-xs font-bold rounded-full border ${colors[idx % colors.length]}`}
         >
-          {k.term} ({k.count})
+          {k.term} <span className="opacity-60 ml-1">({k.count})</span>
         </span>
+      ))}
+    </div>
+  );
+};
+
+// --- SUB-COMPONENT: SEARCH LIST (Trending Searches) ---
+const SearchList = ({ searches }) => {
+  if (!searches || searches.length === 0) return <div className="text-sm text-slate-400">No recent searches</div>;
+
+  return (
+    <div className="space-y-3">
+      {searches.slice(0, 8).map((s, idx) => ( // Limit to top 8
+        <div key={idx} className="flex justify-between items-center group cursor-default">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-300 w-4">#{idx + 1}</span>
+            <span className="text-sm font-medium text-slate-600 group-hover:text-indigo-600 transition-colors">
+              {s.term}
+            </span>
+          </div>
+          <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200 group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-100 transition-all">
+            {s.count}
+          </span>
+        </div>
       ))}
     </div>
   );
@@ -90,15 +113,12 @@ export default function AnalyticsDashboard({ stats, user }) {
   // --- PERMISSION LOGIC ---
   const isSuperAdmin = user?.is_super_admin;
   const isAdmin = user?.is_admin || isSuperAdmin;
-  
-  // ✅ FIX: Ensure Adviser is recognized.
   const isAdviser = user?.is_adviser; 
   
   // Permission: Admins, Super Admins, and Advisers can print
   const canPrint = isAdmin || isAdviser;
   
   // Permission: Students are anyone who isn't privileged
-  // ✅ FIX: If isAdviser is TRUE, then isStudent is FALSE.
   const isStudent = !isAdmin && !isAdviser;
 
   // --- FETCH AI INSIGHT ---
@@ -135,6 +155,7 @@ export default function AnalyticsDashboard({ stats, user }) {
   const totalCount = stats.totalDocuments || 0;
   const trendData = stats.uploadTrend || [];
   const keywordData = stats.topKeywords || [];
+  const searchData = stats.topSearches || []; // Get Search Data
 
   return (
     <div ref={componentRef} className="space-y-8 animate-fade-in print:bg-white print:p-0 print:space-y-6">
@@ -251,12 +272,12 @@ export default function AnalyticsDashboard({ stats, user }) {
              </div>
          </div>
 
-         {/* RIGHT: AI Insight & Keywords */}
-         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 flex flex-col print:border-slate-300 print:break-inside-avoid">
+         {/* RIGHT: AI Insight & Keywords & Searches */}
+         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-6 print:border-slate-300 print:break-inside-avoid">
              
-             {/* --- AI INSIGHT: Visible only to privileged users OR on print --- */}
+             {/* --- AI INSIGHT --- */}
              {(!isStudent || canPrint) && (
-               <div className="hidden print:block mb-6">
+               <div className="hidden print:block">
                    <div className="flex items-center gap-2 mb-4">
                       <h3 className="text-xl font-bold text-slate-800">AI Analysis</h3>
                       <span className="text-indigo-500">✨</span>
@@ -274,10 +295,18 @@ export default function AnalyticsDashboard({ stats, user }) {
                </div>
              )}
 
-             {/* --- KEYWORDS --- */}
+             {/* --- KEYWORDS (Trending Topics) --- */}
              <div className="print:border-t print:border-slate-100 print:pt-6">
-               <h4 className="text-xs font-bold text-slate-400 uppercase mb-4">Trending Topics</h4>
+               <h4 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-wider">Trending Keywords</h4>
                <KeywordCloud keywords={keywordData} />
+             </div>
+
+             <div className="border-t border-slate-100"></div>
+
+             {/* --- TRENDING SEARCHES (Added Here) --- */}
+             <div>
+               <h4 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-wider">Trending Searches</h4>
+               <SearchList searches={searchData} />
              </div>
          </div>
       </div>
