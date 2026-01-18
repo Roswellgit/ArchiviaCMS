@@ -1,22 +1,25 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast'; // ✅ Import Toast
 
 export default function EditUserModal({ user, onClose, onUpdateSuccess }) {
   const [formData, setFormData] = useState({ 
     first_name: '', 
     last_name: '', 
     email: '', 
-    password: '', // Added password field just in case
+    password: '', 
     is_admin: false 
   });
   
-  const [step, setStep] = useState('EDIT'); // 'EDIT' or 'OTP'
+  const [step, setStep] = useState('EDIT'); 
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState(''); // To show "OTP Sent" or error messages
+  const [message, setMessage] = useState(''); 
 
-  // Load user data when component mounts
+  // Use the safe API URL fallback for local development
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
   useEffect(() => {
     if (user) {
       setFormData({ 
@@ -41,18 +44,18 @@ export default function EditUserModal({ user, onClose, onUpdateSuccess }) {
 
     try {
       const token = localStorage.getItem('token');
-      // Using the specific endpoint for profile updates (self-service)
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/update-profile/initiate`, {
+      
+      const res = await fetch(`${API_URL}/auth/update-profile/initiate`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          firstName: formData.first_name, // Map to backend expectation
+          firstName: formData.first_name, 
           lastName: formData.last_name,
           email: formData.email,
-          password: formData.password // Optional
+          password: formData.password 
         }),
       });
 
@@ -63,14 +66,18 @@ export default function EditUserModal({ user, onClose, onUpdateSuccess }) {
       if (data.requireOtp) {
         setStep('OTP');
         setMessage(data.message);
+        toast.success("OTP sent to your email!"); // ✅ Optional: Toast for OTP sent
       } else {
-        // Fallback if OTP is disabled on backend for some reason
+        // Success without OTP (e.g. just name change, if backend allows)
+        toast.success('Profile updated successfully!'); // ✅ Toast here
         if (onUpdateSuccess) onUpdateSuccess();
         onClose();
       }
     } catch (err) {
       console.error(err);
       setMessage(err.message);
+      // Optional: You could also toast the error
+      // toast.error(err.message); 
     } finally { 
       setLoading(false); 
     }
@@ -84,7 +91,7 @@ export default function EditUserModal({ user, onClose, onUpdateSuccess }) {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/update-profile/verify`, {
+      const res = await fetch(`${API_URL}/auth/update-profile/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -97,18 +104,20 @@ export default function EditUserModal({ user, onClose, onUpdateSuccess }) {
 
       if (!res.ok) throw new Error(data.message || 'Verification failed');
 
-      // Update local storage token if a new one was returned (often done when email changes)
       if (data.token) {
         localStorage.setItem('token', data.token);
       }
 
-      alert('Profile updated successfully!');
-      if (onUpdateSuccess) onUpdateSuccess(); // Refresh parent data
+      // ✅ SUCCESS: Toast instead of Alert
+      toast.success('Profile updated successfully!');
+      
+      if (onUpdateSuccess) onUpdateSuccess(); 
       onClose();
 
     } catch (err) {
       console.error(err);
       setMessage(err.message);
+      toast.error(err.message); // ✅ Optional: Toast on error too
     } finally {
       setLoading(false);
     }
@@ -120,12 +129,11 @@ export default function EditUserModal({ user, onClose, onUpdateSuccess }) {
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
       <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg">
         
-        {/* Header */}
         <h2 className="text-xl font-bold mb-2 text-slate-900">
           {step === 'EDIT' ? 'Edit User Profile' : 'Verify Update'}
         </h2>
         
-        {/* Error/Info Message Banner */}
+        {/* Inline Message Banner */}
         {message && (
           <div className={`p-3 rounded-lg mb-4 text-sm font-medium ${step === 'OTP' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
             {message}
@@ -133,7 +141,6 @@ export default function EditUserModal({ user, onClose, onUpdateSuccess }) {
         )}
 
         {step === 'EDIT' ? (
-          // --- STEP 1: EDIT FORM ---
           <form onSubmit={handleInitiateUpdate} className="space-y-5">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -172,7 +179,6 @@ export default function EditUserModal({ user, onClose, onUpdateSuccess }) {
             </div>
           </form>
         ) : (
-          // --- STEP 2: OTP FORM ---
           <form onSubmit={handleVerifyOtp} className="space-y-5">
             <p className="text-slate-600 text-sm">
               For security, we sent a verification code to your current email address. Please enter it below.
