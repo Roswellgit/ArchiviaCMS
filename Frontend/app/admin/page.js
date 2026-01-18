@@ -19,7 +19,8 @@ import {
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+    // Fixed positioning ensures it covers the whole screen (viewport)
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in">
         <div className="p-6 text-center">
           <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
@@ -60,7 +61,6 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
             </tr>
           ) : (
             items.map(item => {
-              // 👇 ROBUST REASON CHECKER: Checks multiple possible field names
               const reasonText = item.reason || item.archive_reason || item.deletion_reason || item.request_reason;
 
               return (
@@ -71,14 +71,12 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
                       </p>
                       {item.author_name && <p className="text-xs text-slate-400">By: {item.author_name}</p>}
                       
-                      {/* Render Reason if found */}
                       {reasonText && (
                         <p className="text-xs text-slate-500 italic bg-slate-50 p-1 rounded mt-1 border border-slate-100 inline-block">
                           "{reasonText}"
                         </p>
                       )}
                   </td>
-                  {/* Buttons aligned to the right */}
                   <td className="p-4 align-top w-[180px]">
                       <div className="flex justify-end gap-2">
                           <button 
@@ -128,17 +126,14 @@ export default function AdminDashboardPage() {
   // --- SAFE FETCH DATA ---
   const fetchAllData = async () => {
     try {
-      // 1. Fetch Stats (Independent)
       try {
         const statsRes = await getAdminAnalytics();
         setStats(statsRes.data);
       } catch (e) { console.error("Stats error", e); }
 
-      // 2. Fetch Lists (Only if Admin)
       if (isAdmin) {
         getPendingDocuments().then(res => setPendingUploads(res.data || res)).catch(e => console.error("Uploads error", e));
         
-        // Only Super Admin fetches Archives & Deletions
         if (isSuperAdmin) {
             getDocArchiveRequests().then(res => setDocArchives(res.data || res)).catch(e => console.error("Doc Archive error", e));
             getUserArchiveRequests().then(res => setUserArchives(res.data || res)).catch(e => console.error("User Archive error", e));
@@ -179,7 +174,7 @@ export default function AdminDashboardPage() {
           }
           
           toast.success(`${action === 'approve' ? 'Approved' : 'Rejected'} successfully!`);
-          fetchAllData(); // Refresh data
+          fetchAllData(); 
       } catch (err) {
           toast.error("Action failed. Check console.");
           console.error(err);
@@ -191,127 +186,125 @@ export default function AdminDashboardPage() {
   if (loading || authLoading) return <div className="p-20 text-center text-slate-400">Loading dashboard...</div>;
 
   return (
-    <div className="space-y-12 animate-fade-in pb-24">
-      
-      {/* HEADER */}
-      <div className="border-b border-gray-200 pb-6">
-        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-              {isPrivileged ? 'Admin Dashboard' : 'Analytics Hub'}
-        </h2>
-        <p className="text-slate-500 mt-1">Welcome back, {user?.firstName}.</p>
-      </div>
-
-      {/* --- SECTION 1: STATS CARDS --- */}
-      {isPrivileged && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Users</p>
-                <h3 className="text-3xl font-extrabold text-slate-900 mt-2">{stats?.totalUsers || 0}</h3>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Documents</p>
-                <h3 className="text-3xl font-extrabold text-slate-900 mt-2">{stats?.totalDocuments || 0}</h3>
-            </div>
-
-            {isAdmin && (
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Tasks</p>
-                    <h3 className="text-3xl font-extrabold text-orange-600 mt-2">
-                        {isSuperAdmin 
-                            ? pendingUploads.length + docArchives.length + userArchives.length + deletionRequests.length
-                            : pendingUploads.length
-                        }
-                    </h3>
-                </div>
-            )}
-            
-            <div className="bg-slate-900 p-5 rounded-2xl shadow-sm text-white flex flex-col justify-center gap-2">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Quick Actions</p>
-                <Link href="/admin/users" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
-                   <span className="font-bold text-sm">Manage Users</span>
-                   <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
-                </Link>
-                {isAdmin && (
-                    <>
-                        <div className="border-t border-white/10"></div>
-                        <Link href="/admin/documents" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
-                           <span className="font-bold text-sm">Manage Documents</span>
-                           <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
-                        </Link>
-                    </>
-                )}
-            </div>
+    // 👇 CHANGED: Using Fragment (<>...</>) to separate the scrolling content from the Fixed Modal
+    <>
+      <div className="space-y-12 animate-fade-in pb-24">
+        
+        {/* HEADER */}
+        <div className="border-b border-gray-200 pb-6">
+          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                {isPrivileged ? 'Admin Dashboard' : 'Analytics Hub'}
+          </h2>
+          <p className="text-slate-500 mt-1">Welcome back, {user?.firstName}.</p>
         </div>
-      )}
 
-      {/* --- SECTION 2: REQUEST GRID (2x2) --- */}
-      {isAdmin && (
-          <div className="space-y-6">
-              <h3 className="text-2xl font-bold text-slate-800 border-l-4 border-indigo-600 pl-4">Pending Requests</h3>
-              
-              {/* 👇 2x2 GRID LAYOUT */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
-                  
-                  {/* 1. DOCUMENT APPROVALS (If not Super Admin, take full width) */}
-                  <div className={!isSuperAdmin ? "lg:col-span-2" : ""}>
-                      <RequestTable 
-                        title="Document Approvals" 
-                        items={pendingUploads} 
-                        type="upload" 
-                        onAction={initiateAction} 
-                        emptyMsg="No new documents to review."
-                        colorClass="text-indigo-600"
-                        icon="📄"
-                      />
+        {/* --- SECTION 1: STATS --- */}
+        {isPrivileged && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Users</p>
+                  <h3 className="text-3xl font-extrabold text-slate-900 mt-2">{stats?.totalUsers || 0}</h3>
+              </div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Documents</p>
+                  <h3 className="text-3xl font-extrabold text-slate-900 mt-2">{stats?.totalDocuments || 0}</h3>
+              </div>
+
+              {isAdmin && (
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Tasks</p>
+                      <h3 className="text-3xl font-extrabold text-orange-600 mt-2">
+                          {isSuperAdmin 
+                              ? pendingUploads.length + docArchives.length + userArchives.length + deletionRequests.length
+                              : pendingUploads.length
+                          }
+                      </h3>
                   </div>
-
-                  {isSuperAdmin && (
-                    <>
-                        {/* 2. DELETION REQUESTS */}
-                        <RequestTable 
-                            title="Document Deletion Requests" 
-                            items={deletionRequests} 
-                            type="deletion" 
-                            onAction={initiateAction} 
-                            emptyMsg="No pending deletion requests."
-                            colorClass="text-red-700"
-                            icon="🗑️"
-                        />
-
-                        {/* 3. DOCUMENT ARCHIVE REQUESTS */}
-                        <RequestTable 
-                            title="Document Archive Requests" 
-                            items={docArchives} 
-                            type="docArchive" 
-                            onAction={initiateAction} 
-                            emptyMsg="No document archive requests."
-                            colorClass="text-orange-600"
-                            icon="📦"
-                        />
-
-                        {/* 4. USER ARCHIVE REQUESTS */}
-                        <RequestTable 
-                            title="User Archive Requests" 
-                            items={userArchives} 
-                            type="userArchive" 
-                            onAction={initiateAction} 
-                            emptyMsg="No user archive requests."
-                            colorClass="text-rose-600"
-                            icon="👤"
-                        />
-                    </>
+              )}
+              
+              <div className="bg-slate-900 p-5 rounded-2xl shadow-sm text-white flex flex-col justify-center gap-2">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Quick Actions</p>
+                  <Link href="/admin/users" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
+                    <span className="font-bold text-sm">Manage Users</span>
+                    <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
+                  </Link>
+                  {isAdmin && (
+                      <>
+                          <div className="border-t border-white/10"></div>
+                          <Link href="/admin/documents" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
+                            <span className="font-bold text-sm">Manage Documents</span>
+                            <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
+                          </Link>
+                      </>
                   )}
               </div>
           </div>
-      )}
+        )}
 
-      {/* --- SECTION 3: ANALYTICS --- */}
-      <div className="mt-12 pt-12 border-t border-slate-200">
-          <h3 className="text-2xl font-bold text-slate-800 mb-8 border-l-4 border-blue-500 pl-4">Research Analytics</h3>
-          <AnalyticsDashboard stats={stats} user={user} />
+        {/* --- SECTION 2: GRID --- */}
+        {isAdmin && (
+            <div className="space-y-6">
+                <h3 className="text-2xl font-bold text-slate-800 border-l-4 border-indigo-600 pl-4">Pending Requests</h3>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
+                    <div className={!isSuperAdmin ? "lg:col-span-2" : ""}>
+                        <RequestTable 
+                          title="Document Approvals" 
+                          items={pendingUploads} 
+                          type="upload" 
+                          onAction={initiateAction} 
+                          emptyMsg="No new documents to review."
+                          colorClass="text-indigo-600"
+                          icon="📄"
+                        />
+                    </div>
+
+                    {isSuperAdmin && (
+                      <>
+                          <RequestTable 
+                              title="Document Deletion Requests" 
+                              items={deletionRequests} 
+                              type="deletion" 
+                              onAction={initiateAction} 
+                              emptyMsg="No pending deletion requests."
+                              colorClass="text-red-700"
+                              icon="🗑️"
+                          />
+
+                          <RequestTable 
+                              title="Document Archive Requests" 
+                              items={docArchives} 
+                              type="docArchive" 
+                              onAction={initiateAction} 
+                              emptyMsg="No document archive requests."
+                              colorClass="text-orange-600"
+                              icon="📦"
+                          />
+
+                          <RequestTable 
+                              title="User Archive Requests" 
+                              items={userArchives} 
+                              type="userArchive" 
+                              onAction={initiateAction} 
+                              emptyMsg="No user archive requests."
+                              colorClass="text-rose-600"
+                              icon="👤"
+                          />
+                      </>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* --- SECTION 3: ANALYTICS --- */}
+        <div className="mt-12 pt-12 border-t border-slate-200">
+            <h3 className="text-2xl font-bold text-slate-800 mb-8 border-l-4 border-blue-500 pl-4">Research Analytics</h3>
+            <AnalyticsDashboard stats={stats} user={user} />
+        </div>
+
       </div>
 
-      {/* CONFIRMATION MODAL */}
+      {/* 👇 MOVED OUTSIDE: This ensures the modal is fixed to the Viewport, not the scrolled content */}
       <ConfirmationModal 
         isOpen={confirmConfig.isOpen}
         onClose={() => setConfirmConfig({...confirmConfig, isOpen: false})}
@@ -321,7 +314,6 @@ export default function AdminDashboardPage() {
         confirmText={confirmConfig.action === 'approve' ? 'Approve' : 'Reject'}
         isDanger={confirmConfig.action === 'reject'}
       />
-
-    </div>
+    </>
   );
 }
