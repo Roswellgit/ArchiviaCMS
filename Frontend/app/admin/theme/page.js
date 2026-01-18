@@ -2,10 +2,40 @@
 
 import { useState, useEffect } from 'react';
 import { HexColorPicker } from 'react-colorful';
-import { getSettings, adminUpdateSettings, adminUploadIcon, adminUploadBgImage, adminRemoveBgImage, adminUploadBrandIcon, adminRemoveBrandIcon, adminResetSettings } from '../../../services/apiService';
+import { 
+  getSettings, 
+  adminUpdateSettings, 
+  adminUploadBgImage, 
+  adminRemoveBgImage, 
+  adminUploadBrandIcon, 
+  adminRemoveBrandIcon, 
+  adminResetSettings 
+} from '../../../services/apiService';
 import { toast } from 'react-hot-toast';
 
+// --- Reusable Confirmation Modal ---
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in border border-gray-100">
+        <div className="p-6 text-center">
+          <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
+          <p className="text-slate-600 text-sm mb-6">{message}</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={onClose} className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition">Cancel</button>
+            <button onClick={onConfirm} className={`px-4 py-2 text-white font-bold rounded-lg shadow-md transition ${isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+              {confirmText || 'Confirm'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function AdminThemeManagement() {
+  // --- STATE ---
   const [settings, setSettings] = useState({
     backgroundColor: '#f8fafc', 
     foregroundColor: '#0f172a', 
@@ -20,11 +50,14 @@ export default function AdminThemeManagement() {
     brandIconUrl: 'none',
   });
   
-  const [iconFile, setIconFile] = useState(null);
   const [bgImageFile, setBgImageFile] = useState(null);
   const [brandIconFile, setBrandIconFile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Modal State
+  const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, type: '' });
+
+  // --- LOAD DATA ---
   useEffect(() => {
     getSettings().then(res => { 
         setSettings(prev => ({ ...prev, ...res.data })); 
@@ -36,6 +69,7 @@ export default function AdminThemeManagement() {
     });
   }, []);
 
+  // --- FORM HANDLERS ---
   const handleSettingChange = (e) => setSettings({ ...settings, [e.target.name]: e.target.value });
   const handleColorChange = (key, val) => setSettings({ ...settings, [key]: val });
 
@@ -52,51 +86,15 @@ export default function AdminThemeManagement() {
     }
   };
 
-  const confirmReset = () => {
-    toast((t) => (
-      <div className="flex flex-col gap-2">
-        <p className="font-bold text-slate-800 text-sm">Reset to default theme?</p>
-        <p className="text-xs text-slate-500">This will discard all customizations.</p>
-        <div className="flex gap-2 justify-end pt-1">
-          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
-          <button onClick={() => {
-              toast.dismiss(t.id);
-              executeReset();
-          }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Reset</button>
-        </div>
-      </div>
-    ), { duration: 5000, position: 'top-center', icon: '⚠️' });
-  };
-
-  const executeReset = async () => {
-    setLoading(true);
-    try { 
-        const res = await adminResetSettings(); 
-        setSettings(prev => ({ ...prev, ...res.data })); 
-        toast.success('Reset successful.'); 
-    } catch { 
-        toast.error('Reset failed.'); 
-    } finally { 
-        setLoading(false); 
-    }
-  };
-
-  const handleIconSubmit = async (e) => {
-      e.preventDefault(); if(!iconFile) return; setLoading(true);
-      const fd = new FormData(); fd.append('icon', iconFile);
-      try { await adminUploadIcon(fd); toast.success("Favicon updated."); } catch(e){ toast.error("Failed."); } finally { setLoading(false); }
-  };
-
-  
-  const handleBgSubmit = async (e) => {
-      if (e) e.preventDefault(); 
-      if (!bgImageFile) return; 
+  // --- UPLOAD HANDLERS ---
+  const handleBgSubmit = async () => {
+      if (!bgImageFile) return toast.error("Please select a background file first."); 
       setLoading(true);
       const fd = new FormData(); 
       fd.append('bg-image', bgImageFile);
       try { 
           const r = await adminUploadBgImage(fd); 
-          setSettings({...settings, backgroundImage: r.data.imageUrl}); 
+          setSettings(prev => ({...prev, backgroundImage: r.data.imageUrl})); 
           toast.success("Background updated."); 
       } catch(err){ 
           toast.error("Failed to upload background."); 
@@ -105,16 +103,14 @@ export default function AdminThemeManagement() {
       }
   };
 
-  
-  const handleBrandSubmit = async (e) => {
-      if (e) e.preventDefault(); 
-      if (!brandIconFile) return; 
+  const handleBrandSubmit = async () => {
+      if (!brandIconFile) return toast.error("Please select an icon file first."); 
       setLoading(true);
       const fd = new FormData(); 
       fd.append('brand-icon', brandIconFile);
       try { 
           const r = await adminUploadBrandIcon(fd); 
-          setSettings({...settings, brandIconUrl: r.data.iconUrl}); 
+          setSettings(prev => ({...prev, brandIconUrl: r.data.iconUrl})); 
           toast.success("Brand icon updated."); 
       } catch(err){ 
           toast.error("Failed to upload icon."); 
@@ -122,57 +118,59 @@ export default function AdminThemeManagement() {
           setLoading(false); 
       }
   };
-  
-  const handleRemoveBg = () => {
-      toast((t) => (
-        <div className="flex flex-col gap-2">
-            <p className="font-bold text-slate-800 text-sm">Remove background image?</p>
-            <div className="flex gap-2 justify-end pt-1">
-                <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
-                <button onClick={async () => {
-                    toast.dismiss(t.id);
-                    try { await adminRemoveBgImage(); setSettings({...settings, backgroundImage: 'none'}); toast.success("Removed."); } catch { toast.error("Failed."); }
-                }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Remove</button>
-            </div>
-        </div>
-      ), { duration: 5000, position: 'top-center', icon: '🗑️' });
+
+  // --- MODAL ACTION LOGIC ---
+  const initiateConfirm = (type) => {
+    setConfirmConfig({ isOpen: true, type });
   };
 
-  const handleRemoveBrand = () => {
-      toast((t) => (
-        <div className="flex flex-col gap-2">
-            <p className="font-bold text-slate-800 text-sm">Remove brand icon?</p>
-            <div className="flex gap-2 justify-end pt-1">
-                <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
-                <button onClick={async () => {
-                    toast.dismiss(t.id);
-                    try { await adminRemoveBrandIcon(); setSettings({...settings, brandIconUrl: 'none'}); toast.success("Removed."); } catch { toast.error("Failed."); }
-                }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Remove</button>
-            </div>
-        </div>
-      ), { duration: 5000, position: 'top-center', icon: '🗑️' });
+  const executeAction = async () => {
+    const { type } = confirmConfig;
+    setConfirmConfig({ ...confirmConfig, isOpen: false }); // Close modal immediately
+    setLoading(true);
+
+    try {
+        if (type === 'reset') {
+            const res = await adminResetSettings(); 
+            setSettings(prev => ({ ...prev, ...res.data })); 
+            toast.success('Theme reset to defaults.');
+        } else if (type === 'removeBg') {
+            await adminRemoveBgImage(); 
+            setSettings(prev => ({...prev, backgroundImage: 'none'})); 
+            toast.success("Background image removed.");
+        } else if (type === 'removeBrand') {
+            await adminRemoveBrandIcon(); 
+            setSettings(prev => ({...prev, brandIconUrl: 'none'})); 
+            toast.success("Brand icon removed.");
+        }
+    } catch (err) {
+        toast.error('Action failed.');
+        console.error(err);
+    } finally {
+        setLoading(false);
+    }
   };
 
   if (loading && !settings.navbarBrandText) return <div className="p-10 text-center">Loading theme...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
+    <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-24">
+      {/* Page Header */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-4">
         <div>
             <h2 className="text-3xl font-extrabold text-slate-900">Theme Customization</h2>
             <p className="text-slate-500 mt-1">Branding and appearance settings</p>
         </div>
-        <button onClick={confirmReset} className="text-sm font-bold text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg transition">Reset Defaults</button>
+        <button onClick={() => initiateConfirm('reset')} className="text-sm font-bold text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg transition">Reset Defaults</button>
       </div>
 
       {/* Main Settings Form */}
       <form onSubmit={submitSettings} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        {/* Colors Card */}
+        {/* LEFT COLUMN: Colors */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <h3 className="text-lg font-bold text-slate-800 mb-6">Color Palette</h3>
             <div className="space-y-8">
-                
                 {/* 1. Page Background */}
                 <div>
                     <div className="flex justify-between items-center mb-2">
@@ -208,11 +206,10 @@ export default function AdminThemeManagement() {
                         <div className="w-16 h-16 rounded-xl border-2 border-slate-100 shadow-sm shrink-0" style={{ backgroundColor: settings.navbarTextColor }}></div>
                     </div>
                 </div>
-
             </div>
         </div>
 
-        {/* Typography & Brand Card */}
+        {/* RIGHT COLUMN: Typography & Assets */}
         <div className="flex flex-col gap-8">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex-grow">
                 <h3 className="text-lg font-bold text-slate-800 mb-6">Typography & Brand</h3>
@@ -242,46 +239,55 @@ export default function AdminThemeManagement() {
                     </div>
                 </div>
                 <button type="submit" disabled={loading} className="mt-8 w-full py-3.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-indigo-600 transition shadow-lg disabled:opacity-50">
-                    Save Visual Settings
+                    {loading ? 'Saving...' : 'Save Visual Settings'}
                 </button>
             </div>
 
             {/* Asset Uploads Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 {/* Bg Image Upload */}
-                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                    <div className="flex justify-between items-center mb-3">
+                  {/* Bg Image Upload */}
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                     <div className="flex justify-between items-center mb-3">
                         <h4 className="text-sm font-bold text-slate-800">Background Image</h4>
                         {settings.backgroundImage !== 'none' && (
-                            <button type="button" onClick={handleRemoveBg} className="text-xs text-red-500 font-bold hover:underline">Remove</button>
+                            <button type="button" onClick={() => initiateConfirm('removeBg')} className="text-xs text-red-500 font-bold hover:underline">Remove</button>
                         )}
-                    </div>
-                    {/* FIXED: Changed from <form> to <div> */}
-                    <div className="space-y-3">
+                     </div>
+                     <div className="space-y-3">
                         <input type="file" onChange={(e) => setBgImageFile(e.target.files[0])} className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
-                        {/* FIXED: type="button" and onClick handler */}
                         <button type="button" onClick={handleBgSubmit} className="w-full py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition text-xs">Upload BG</button>
-                    </div>
-                 </div>
+                     </div>
+                  </div>
 
-                 {/* Brand Icon Upload */}
-                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                    <div className="flex justify-between items-center mb-3">
+                  {/* Brand Icon Upload */}
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                     <div className="flex justify-between items-center mb-3">
                         <h4 className="text-sm font-bold text-slate-800">Brand Icon</h4>
                         {settings.brandIconUrl !== 'none' && (
-                            <button type="button" onClick={handleRemoveBrand} className="text-xs text-red-500 font-bold hover:underline">Remove</button>
+                            <button type="button" onClick={() => initiateConfirm('removeBrand')} className="text-xs text-red-500 font-bold hover:underline">Remove</button>
                         )}
-                    </div>
-                    {/* FIXED: Changed from <form> to <div> */}
-                    <div className="space-y-3">
+                     </div>
+                     <div className="space-y-3">
                         <input type="file" onChange={(e) => setBrandIconFile(e.target.files[0])} className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
-                        {/* FIXED: type="button" and onClick handler */}
                         <button type="button" onClick={handleBrandSubmit} className="w-full py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition text-xs">Upload Icon</button>
-                    </div>
-                 </div>
+                     </div>
+                  </div>
             </div>
         </div>
       </form>
+
+      {/* REUSABLE CONFIRMATION MODAL */}
+      <ConfirmationModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({...confirmConfig, isOpen: false})}
+        onConfirm={executeAction}
+        title={confirmConfig.type === 'reset' ? 'Reset Theme?' : 'Remove Asset?'}
+        message={confirmConfig.type === 'reset' 
+            ? "This will revert all theme settings to default. This cannot be undone." 
+            : "Are you sure you want to remove this image/icon?"}
+        confirmText={confirmConfig.type === 'reset' ? 'Reset' : 'Remove'}
+        isDanger={true}
+      />
     </div>
   );
 }

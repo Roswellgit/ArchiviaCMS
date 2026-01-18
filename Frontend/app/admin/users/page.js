@@ -5,9 +5,28 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../context/AuthContext';
-import api from '../../../services/apiService'; 
-import { getAllUsers, adminUpdateUser, adminDeleteUser, getFormOptions } from '../../../services/apiService';
-import EditUserModal from '../../../components/EditUserModal';
+import api, { getAllUsers, adminDeleteUser, getFormOptions } from '../../../services/apiService';
+
+// --- Reusable Confirmation Modal (High Z-Index for overlays) ---
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in border border-gray-100">
+        <div className="p-6 text-center">
+          <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
+          <p className="text-slate-600 text-sm mb-6">{message}</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={onClose} className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition">Cancel</button>
+            <button onClick={onConfirm} className={`px-4 py-2 text-white font-bold rounded-lg shadow-md transition ${isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+              {confirmText || 'Confirm'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function ManageUsersPage() {
   const { user: currentUser, authLoading } = useAuth();
@@ -21,13 +40,25 @@ export default function ManageUsersPage() {
   
   const [showUserModal, setShowUserModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   
+  // Archive Modal State
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [userToArchive, setUserToArchive] = useState(null);
+  const [archiveReason, setArchiveReason] = useState('');
+
+  // General Confirmation Modal State
+  const [confirmConfig, setConfirmConfig] = useState({ 
+    isOpen: false, 
+    action: null, // 'deleteGroup' | 'removeMember'
+    data: null, 
+    title: '', 
+    message: '' 
+  });
+
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [groupMembers, setGroupMembers] = useState([]);
   const [selectedStudentToAdd, setSelectedStudentToAdd] = useState('');
-  const [selectedUser, setSelectedUser] = useState(null);
 
   // Form Data
   const [newUser, setNewUser] = useState({
@@ -81,7 +112,6 @@ export default function ManageUsersPage() {
         router.push('/'); 
       } else {
         fetchData();
-        // Set default accessLevel based on hierarchy
         if (isSuperAdmin) setNewUser(prev => ({...prev, accessLevel: 'Admin'}));
         else if (isAdmin) setNewUser(prev => ({...prev, accessLevel: 'Advisor'}));
         else if (isAdvisor) setNewUser(prev => ({...prev, accessLevel: 'Student'}));
@@ -89,7 +119,52 @@ export default function ManageUsersPage() {
     }
   }, [authLoading, isPrivileged, isSuperAdmin, isAdmin, isAdvisor]);
 
-  // --- HANDLERS ---
+  // --- CONFIRMATION HANDLERS ---
+  
+  const promptDeleteGroup = (groupId, groupName) => {
+    setConfirmConfig({
+      isOpen: true,
+      action: 'deleteGroup',
+      data: { groupId },
+      title: 'Delete Group?',
+      message: `Are you sure you want to delete "${groupName}"? This action cannot be undone.`
+    });
+  };
+
+  const promptRemoveMember = (userId) => {
+    setConfirmConfig({
+      isOpen: true,
+      action: 'removeMember',
+      data: { userId },
+      title: 'Remove Student?',
+      message: 'Are you sure you want to remove this student from the group?'
+    });
+  };
+
+  const executeConfirmation = async () => {
+    const { action, data } = confirmConfig;
+    if (!action) return;
+
+    try {
+      if (action === 'deleteGroup') {
+          await api.delete(`/admin/groups/${data.groupId}`);
+          toast.success("Group deleted.");
+          fetchData();
+      } else if (action === 'removeMember') {
+          await api.delete(`/admin/groups/${selectedGroup.id}/members/${data.userId}`);
+          toast.success("Student removed.");
+          fetchGroupMembers(selectedGroup.id);
+          fetchData();
+      }
+    } catch (err) {
+      toast.error("Action failed. Please try again.");
+      console.error(err);
+    } finally {
+      setConfirmConfig({ ...confirmConfig, isOpen: false });
+    }
+  };
+
+  // --- OTHER HANDLERS ---
   const handleCreateUser = async (e) => {
     e.preventDefault();
     try {
@@ -102,7 +177,6 @@ export default function ManageUsersPage() {
         } : undefined
       };
 
-      // Set DB role string based on selection
       if (isAdvisor) {
           payload.role = 'student';
           payload.accessLevel = 'Student';
@@ -144,16 +218,6 @@ export default function ManageUsersPage() {
     } catch (err) { toast.error(err.response?.data?.message || "Failed to add student."); }
   };
 
-  const handleRemoveMember = async (userId) => {
-    if(!confirm("Remove this student from the group?")) return;
-    try {
-        await api.delete(`/admin/groups/${selectedGroup.id}/members/${userId}`);
-        toast.success("Student removed.");
-        fetchGroupMembers(selectedGroup.id);
-        fetchData();
-    } catch (err) { toast.error("Failed to remove student."); }
-  };
-
   const handleCreateGroup = async (e) => {
     e.preventDefault();
     try {
@@ -165,31 +229,27 @@ export default function ManageUsersPage() {
     } catch (err) { toast.error("Failed to create group."); }
   };
 
-  const handleDeleteGroup = async (groupId, groupName) => {
-    if (!confirm(`Delete group "${groupName}"?`)) return;
-    try {
-        await api.delete(`/admin/groups/${groupId}`);
-        toast.success("Group deleted.");
-        fetchData();
-    } catch (err) { toast.error("Failed to delete group."); }
-  };
-
   const initiateArchive = (targetUser) => {
     if (targetUser.id === currentUser.userId) return toast.error("Cannot archive yourself.");
-    if (confirm(`Archive ${targetUser.first_name}?`)) {
-         adminDeleteUser(targetUser.id, { reason: 'Admin Action' })
-            .then(() => { toast.success("User archived."); fetchData(); })
-            .catch(() => toast.error("Archive failed."));
-    }
+    setUserToArchive(targetUser);
+    setArchiveReason(''); 
+    setShowArchiveModal(true);
   };
 
-  const handleSaveEdit = async (userId, updatedData) => {
+  const handleConfirmArchive = async (e) => {
+    e.preventDefault();
+    if (!archiveReason.trim()) return toast.error("Please provide a reason.");
+
     try {
-      await adminUpdateUser(userId, updatedData); 
-      toast.success('User updated.');
-      setIsEditModalOpen(false);
-      fetchData(); 
-    } catch (err) { toast.error('Update failed.'); }
+      await adminDeleteUser(userToArchive.id, { reason: archiveReason });
+      toast.success("User archived successfully.");
+      setShowArchiveModal(false);
+      setUserToArchive(null);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error("Archive failed.");
+    }
   };
 
   if (authLoading || loading) return <div className="p-10 text-center">Loading...</div>;
@@ -198,7 +258,7 @@ export default function ManageUsersPage() {
   const shouldShowStrand = ['Grade 11', 'Grade 12'].includes(newUser.yearLevel);
 
   return (
-    <div className="space-y-6 animate-fade-in pb-24">
+    <div className="space-y-6 pb-24">
       
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-slate-200">
@@ -272,7 +332,7 @@ export default function ManageUsersPage() {
                               <td className="px-6 py-4 font-medium text-slate-900">{g.name}</td>
                               <td className="px-6 py-4 flex gap-4">
                                   <button onClick={() => openMembersModal(g)} className="text-indigo-600 hover:text-indigo-800 font-medium transition">Manage Members</button>
-                                  {isAdmin && <button onClick={() => handleDeleteGroup(g.id, g.name)} className="text-red-600 hover:text-red-800 font-medium transition">Delete Group</button>}
+                                  {isAdmin && <button onClick={() => promptDeleteGroup(g.id, g.name)} className="text-red-600 hover:text-red-800 font-medium transition">Delete Group</button>}
                               </td>
                           </tr>
                       ))}
@@ -280,6 +340,53 @@ export default function ManageUsersPage() {
               </table>
           </div>
       </div>
+
+      {/* REUSABLE CONFIRMATION MODAL */}
+      <ConfirmationModal 
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onClose={() => setConfirmConfig({...confirmConfig, isOpen: false})}
+        onConfirm={executeConfirmation}
+        isDanger={true}
+        confirmText="Yes, Proceed"
+      />
+
+      {/* --- ARCHIVE USER MODAL (Has Text Input) --- */}
+      {showArchiveModal && userToArchive && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className="p-6 border-b border-gray-100 bg-red-50 flex justify-between items-center">
+               <h3 className="text-lg font-bold text-red-800">Archive User</h3>
+               <button onClick={() => setShowArchiveModal(false)} className="text-red-400 hover:text-red-600 font-bold">✕</button>
+            </div>
+            
+            <form onSubmit={handleConfirmArchive} className="p-6 space-y-4">
+               <p className="text-slate-600 text-sm">
+                 Are you sure you want to archive <strong>{userToArchive.first_name} {userToArchive.last_name}</strong>?
+                 They will no longer be able to log in.
+               </p>
+
+               <div>
+                 <label className="block text-sm font-bold text-slate-700 mb-1">Reason for Archiving</label>
+                 <textarea 
+                   required
+                   className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                   rows="3"
+                   placeholder="e.g. Graduated, Transferred, Policy Violation..."
+                   value={archiveReason}
+                   onChange={(e) => setArchiveReason(e.target.value)}
+                 ></textarea>
+               </div>
+
+               <div className="flex gap-3 justify-end pt-2">
+                 <button type="button" onClick={() => setShowArchiveModal(false)} className="px-4 py-2 text-slate-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium">Cancel</button>
+                 <button type="submit" className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700">Archive User</button>
+               </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: MANAGE GROUP MEMBERS */}
       {showMembersModal && selectedGroup && (
@@ -312,7 +419,9 @@ export default function ManageUsersPage() {
                                         <tr key={member.id} className="hover:bg-slate-50">
                                             <td className="px-4 py-3 font-medium text-slate-900">{member.first_name} {member.last_name}</td>
                                             <td className="px-4 py-3 text-slate-500">{member.email}</td>
-                                            <td className="px-4 py-3 text-right"><button onClick={() => handleRemoveMember(member.id)} className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 px-2 py-1 rounded">Remove</button></td>
+                                            <td className="px-4 py-3 text-right">
+                                              <button onClick={() => promptRemoveMember(member.id)} className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 px-2 py-1 rounded">Remove</button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -342,7 +451,6 @@ export default function ManageUsersPage() {
                <div><label className="block text-sm font-bold text-slate-700 mb-1">Email</label><input required type="email" className="w-full p-2 border rounded-lg" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} /></div>
                <div><label className="block text-sm font-bold text-slate-700 mb-1">School ID</label><input required className="w-full p-2 border rounded-lg" value={newUser.schoolId} onChange={e => setNewUser({...newUser, schoolId: e.target.value})} /></div>
 
-               {/* ✅ STRICT ROLE SELECTION BASED ON HIERARCHY */}
                {!isAdvisor && (
                    <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1">Select Role to Create</label>
@@ -359,7 +467,6 @@ export default function ManageUsersPage() {
                    </div>
                )}
 
-               {/* ✅ ACADEMIC DETAILS: Visible for Advisors or if creating a Student */}
                {(newUser.accessLevel === 'Student' || isAdvisor) && (
                    <div className="bg-blue-50 p-4 rounded-xl space-y-4 border border-blue-100 mt-4">
                       <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">🎓 Academic Details</p>

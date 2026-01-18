@@ -14,6 +14,27 @@ import {
   getUserArchiveRequests, approveUserArchive, rejectUserArchive
 } from '../../services/apiService';
 
+// --- HELPER: CONFIRMATION MODAL ---
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in">
+        <div className="p-6 text-center">
+          <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
+          <p className="text-slate-600 text-sm mb-6">{message}</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={onClose} className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition">Cancel</button>
+            <button onClick={onConfirm} className={`px-4 py-2 text-white font-bold rounded-lg shadow-md transition ${isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-900 hover:bg-emerald-600'}`}>
+              {confirmText || 'Confirm'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- HELPER COMPONENT: REQUEST TABLE ---
 const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon }) => (
   <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col w-full">
@@ -79,35 +100,37 @@ export default function AdminDashboardPage() {
   const [docArchives, setDocArchives] = useState([]);
   const [userArchives, setUserArchives] = useState([]);
 
-  // --- FIXED ROLE CHECK LOGIC ---
-  // We use the database flags directly.
+  // Modal State
+  const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, type: '', id: null, action: '' });
+
+  // Role Checks
   const isSuperAdmin = user?.is_super_admin;
   const isAdmin = user?.is_admin || isSuperAdmin;
-  
-  // ✅ FIX: Use the 'is_adviser' flag from the DB
   const isAdvisor = user?.is_adviser; 
-  
-  // Privileged means they can see the Dashboard & Analytics
   const isPrivileged = isAdmin || isAdvisor;
 
+  // --- SAFE FETCH DATA ---
   const fetchAllData = async () => {
     try {
-      const statsRes = await getAdminAnalytics();
-      setStats(statsRes.data);
+      // 1. Fetch Stats (Independent)
+      try {
+        const statsRes = await getAdminAnalytics();
+        setStats(statsRes.data);
+      } catch (e) { console.error("Stats error", e); }
 
-      // ✅ FIX: Only fetch sensitive request data if user is a FULL ADMIN
+      // 2. Fetch Lists (Only if Admin)
       if (isAdmin) {
-        const [uploadsRes, docArcRes, userArcRes] = await Promise.all([
-            getPendingDocuments(),
-            getDocArchiveRequests(),
-            getUserArchiveRequests()
-        ]);
-        setPendingUploads(uploadsRes.data || uploadsRes);
-        setDocArchives(docArcRes.data || docArcRes);
-        setUserArchives(userArcRes.data || userArcRes);
+        // Everyone (Admins) fetches Pending Documents
+        getPendingDocuments().then(res => setPendingUploads(res.data || res)).catch(e => console.error("Uploads error", e));
+        
+        // ✅ UPDATE: Only fetch Archive requests if Super Admin
+        if (isSuperAdmin) {
+            getDocArchiveRequests().then(res => setDocArchives(res.data || res)).catch(e => console.error("Doc Archive error", e));
+            getUserArchiveRequests().then(res => setUserArchives(res.data || res)).catch(e => console.error("User Archive error", e));
+        }
       }
     } catch (err) {
-      console.error("Failed to load dashboard data", err);
+      console.error("Global fetch error", err);
     } finally {
       setLoading(false);
     }
@@ -119,20 +142,32 @@ export default function AdminDashboardPage() {
     }
   }, [user, authLoading, isPrivileged]);
 
-  const handleAction = async (type, id, action) => {
-      const confirmMsg = `Are you sure you want to ${action} this request?`;
-      if (!window.confirm(confirmMsg)) return;
+  // --- ACTION HANDLERS ---
+  
+  const initiateAction = (type, id, action) => {
+      setConfirmConfig({ isOpen: true, type, id, action });
+  };
+
+  const executeAction = async () => {
+      const { type, id, action } = confirmConfig;
+      if (!type || !id) return;
 
       try {
-          if (type === 'upload') action === 'approve' ? await approveDocument(id) : await rejectDocument(id);
-          else if (type === 'docArchive') action === 'approve' ? await approveDocArchive(id) : await rejectDocArchive(id);
-          else if (type === 'userArchive') action === 'approve' ? await approveUserArchive(id) : await rejectUserArchive(id);
+          if (type === 'upload') {
+              action === 'approve' ? await approveDocument(id) : await rejectDocument(id);
+          } else if (type === 'docArchive') {
+              action === 'approve' ? await approveDocArchive(id) : await rejectDocArchive(id);
+          } else if (type === 'userArchive') {
+              action === 'approve' ? await approveUserArchive(id) : await rejectUserArchive(id);
+          }
           
-          toast.success("Success!");
-          fetchAllData(); 
+          toast.success(`${action === 'approve' ? 'Approved' : 'Rejected'} successfully!`);
+          fetchAllData(); // Refresh data
       } catch (err) {
-          toast.error("Action failed");
+          toast.error("Action failed. Check console.");
           console.error(err);
+      } finally {
+          setConfirmConfig({ ...confirmConfig, isOpen: false });
       }
   };
 
@@ -161,12 +196,15 @@ export default function AdminDashboardPage() {
                 <h3 className="text-3xl font-extrabold text-slate-900 mt-2">{stats?.totalDocuments || 0}</h3>
             </div>
 
-            {/* ✅ FIX: Only ADMINS see the "Pending Tasks" count */}
             {isAdmin && (
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Tasks</p>
                     <h3 className="text-3xl font-extrabold text-orange-600 mt-2">
-                        {pendingUploads.length + docArchives.length + userArchives.length}
+                        {/* Only calculate relevant tasks based on role */}
+                        {isSuperAdmin 
+                            ? pendingUploads.length + docArchives.length + userArchives.length 
+                            : pendingUploads.length
+                        }
                     </h3>
                 </div>
             )}
@@ -175,13 +213,11 @@ export default function AdminDashboardPage() {
             <div className="bg-slate-900 p-5 rounded-2xl shadow-sm text-white flex flex-col justify-center gap-2">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Quick Actions</p>
                 
-                {/* Everyone (Admins + Advisors) can Manage Users */}
                 <Link href="/admin/users" className="flex items-center justify-between hover:bg-white/10 p-2 -mx-2 rounded transition-colors group">
                    <span className="font-bold text-sm">Manage Users</span>
                    <span className="text-slate-400 group-hover:text-white transition-colors">&rarr;</span>
                 </Link>
                 
-                {/* ✅ FIX: Only ADMINS can see "Manage Documents" link */}
                 {isAdmin && (
                     <>
                         <div className="border-t border-white/10"></div>
@@ -196,59 +232,70 @@ export default function AdminDashboardPage() {
       )}
 
       {/* --- SECTION 2: SEPARATE PENDING MODULES --- */}
-      {/* ✅ FIX: Only show this entire section to ADMINS. Advisors don't approve docs. */}
       {isAdmin && (
           <div className="space-y-6">
               <h3 className="text-2xl font-bold text-slate-800 border-l-4 border-indigo-600 pl-4">Pending Requests</h3>
               
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                   
-                  {/* 1. DOCUMENT APPROVALS */}
-                  <div className="xl:col-span-2">
+                  {/* 1. DOCUMENT APPROVALS (Visible to all Admins) */}
+                  <div className={isSuperAdmin ? "xl:col-span-2" : "xl:col-span-2"}>
                      <RequestTable 
                         title="Document Approvals" 
                         items={pendingUploads} 
                         type="upload" 
-                        onAction={handleAction} 
+                        onAction={initiateAction} 
                         emptyMsg="No new documents to review."
                         colorClass="text-indigo-600"
                         icon="📄"
                       />
                   </div>
 
-                  {/* 2. DOCUMENT ARCHIVE REQUESTS */}
-                  <RequestTable 
-                      title="Document Archive Requests" 
-                      items={docArchives} 
-                      type="docArchive" 
-                      onAction={handleAction} 
-                      emptyMsg="No document archive requests."
-                      colorClass="text-orange-600"
-                      icon="📦"
-                  />
+                  {/* 2. DOCUMENT ARCHIVE REQUESTS (Super Admin Only) */}
+                  {isSuperAdmin && (
+                    <RequestTable 
+                        title="Document Archive Requests" 
+                        items={docArchives} 
+                        type="docArchive" 
+                        onAction={initiateAction} 
+                        emptyMsg="No document archive requests."
+                        colorClass="text-orange-600"
+                        icon="📦"
+                    />
+                  )}
 
-                  {/* 3. USER ARCHIVE REQUESTS */}
-                  <RequestTable 
-                      title="User Archive Requests" 
-                      items={userArchives} 
-                      type="userArchive" 
-                      onAction={handleAction} 
-                      emptyMsg="No user archive requests."
-                      colorClass="text-red-600"
-                      icon="👤"
-                  />
+                  {/* 3. USER ARCHIVE REQUESTS (Super Admin Only) */}
+                  {isSuperAdmin && (
+                    <RequestTable 
+                        title="User Archive Requests" 
+                        items={userArchives} 
+                        type="userArchive" 
+                        onAction={initiateAction} 
+                        emptyMsg="No user archive requests."
+                        colorClass="text-red-600"
+                        icon="👤"
+                    />
+                  )}
               </div>
           </div>
       )}
 
       {/* --- SECTION 3: ANALYTICS --- */}
-      {/* Visible to both Admins and Advisors */}
       <div className="mt-12 pt-12 border-t border-slate-200">
           <h3 className="text-2xl font-bold text-slate-800 mb-8 border-l-4 border-blue-500 pl-4">Research Analytics</h3>
-          
           <AnalyticsDashboard stats={stats} user={user} />
-          
       </div>
+
+      {/* CONFIRMATION MODAL */}
+      <ConfirmationModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({...confirmConfig, isOpen: false})}
+        onConfirm={executeAction}
+        title={confirmConfig.action === 'approve' ? 'Approve Request?' : 'Reject Request?'}
+        message={`Are you sure you want to ${confirmConfig.action} this request?`}
+        confirmText={confirmConfig.action === 'approve' ? 'Approve' : 'Reject'}
+        isDanger={confirmConfig.action === 'reject'}
+      />
 
     </div>
   );

@@ -9,46 +9,58 @@ export default function AdminLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Define access logic in one place
+  // Note: This allows Advisors into /admin. 
+  // Ensure individual pages (like /admin/theme) have their own checks if Advisors shouldn't see them.
+  const hasAccess = user?.is_admin || user?.is_super_admin || user?.is_adviser;
+
   useEffect(() => {
     // 1. Wait for Auth to load
     if (authLoading) return;
 
-    // 2. Not logged in? -> Go to Login
+    // 2. Not logged in? -> Go to Login with return URL
     if (!isAuthenticated) {
-      router.push('/login'); 
+      const returnUrl = encodeURIComponent(pathname);
+      router.push(`/login?redirect=${returnUrl}`); 
       return;
     }
 
-    // 3. STRICT BOOLEAN CHECK
-    // We strictly rely on the flags provided by the backend token.
-    // This covers Admin, Super Admin, and Advisor.
-    const hasAccess = user?.is_admin || user?.is_super_admin || user?.is_adviser;
-
-    // 4. Redirect if no access
+    // 3. Redirect if no access
     if (!hasAccess) {
-      // If they are a Student (or any role without these flags), kick them out
+      // Kick them out to analytics (or home /)
       router.push('/analytics'); 
     }
 
-  }, [isAuthenticated, user, authLoading, router, pathname]);
+    // Optional: Strict Redirect for Advisors
+    // If you want to prevent Advisors from seeing Documents/Theme globally:
+    /*
+    if (user?.is_adviser && !user?.is_admin && !user?.is_super_admin) {
+        const protectedRoutes = ['/admin/documents', '/admin/theme', '/admin/requests'];
+        if (protectedRoutes.some(route => pathname.startsWith(route))) {
+            router.push('/admin/users'); // Force them to their allowed area
+        }
+    }
+    */
+
+  }, [isAuthenticated, hasAccess, authLoading, router, pathname, user]);
 
   
-  if (authLoading || !isAuthenticated) {
+  // 4. Loading State (Prevents content flash)
+  if (authLoading || !isAuthenticated || !hasAccess) {
     return (
       <main className="container mx-auto p-20 text-center text-slate-400">
-        <div className="animate-pulse">Verifying permissions...</div>
+        <div className="animate-pulse flex flex-col items-center gap-4">
+            <div className="h-4 w-32 bg-slate-200 rounded"></div>
+            <span className="text-sm">Verifying permissions...</span>
+        </div>
       </main>
     );
   }
 
-  // 5. Render Content (Double-check permissions to prevent content flash)
-  const hasAccess = user?.is_admin || user?.is_super_admin || user?.is_adviser;
-
-  if (!hasAccess) return null;
-
+  // 5. Render Content
   return (
     <main 
-      className="container mx-auto p-6 md:p-10 min-h-screen"
+      className="container mx-auto p-6 md:p-10 min-h-screen animate-fade-in"
       style={{ backgroundColor: 'var(--background-color)' }}
     >
         <div className="max-w-7xl mx-auto">
