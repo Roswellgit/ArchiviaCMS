@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import EditDocumentModal from '../../../components/EditDocumentModal'; 
 import { 
   searchDocuments, 
   fetchPendingDocs, 
@@ -26,7 +25,7 @@ export default function AdminDocumentManagement() {
   const itemsPerPage = 10;
 
   // --- MODAL STATES ---
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
   const [selectedDocument, setSelectedDocument] = useState(null);
 
   // Archive Modal State (Only used for Archive because it needs a reason input)
@@ -187,16 +186,9 @@ export default function AdminDocumentManagement() {
     } catch (err) { toast.error("Delete failed."); }
   };
 
-  const handleEdit = (doc) => { setSelectedDocument(doc); setIsEditModalOpen(true); };
+  
 
-  const handleSave = async (docId, updatedData) => {
-    try {
-        await adminUpdateDocument(docId, updatedData);
-        setIsEditModalOpen(false);
-        toast.success('Document updated.');
-        refreshData();
-    } catch (error) { toast.error("Save failed."); }
-  };
+
 
   // --- FILTERING ---
   let listToRender = [];
@@ -324,9 +316,7 @@ export default function AdminDocumentManagement() {
                            </>
                         ) : (
                            <>
-                              {currentTab === 'active' && (
-                                  <button onClick={() => handleEdit(doc)} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">Edit</button>
-                              )}
+                             
                               
                               {(currentTab === 'active' && user?.is_super_admin) && <div className="hidden md:block h-4 w-px bg-slate-200"></div>}
                               
@@ -378,8 +368,7 @@ export default function AdminDocumentManagement() {
         </>
       )}
       
-      {/* EDIT MODAL */}
-      {isEditModalOpen && <EditDocumentModal document={selectedDocument} onClose={() => setIsEditModalOpen(false)} onSave={handleSave}/>}
+      
 
       {/* ARCHIVE REASON MODAL */}
       {isArchiveModalOpen && docToArchive && (
