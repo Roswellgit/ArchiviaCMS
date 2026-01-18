@@ -6,6 +6,34 @@ import { useEffect, useState } from 'react';
 import { requestPasswordOTP, changeUserPassword } from '../services/apiService';
 import EditUserModal from '../components/EditUserModal'; 
 
+// --- 1. HELPER COMPONENT: Password Checklist ---
+const PasswordRequirements = ({ password }) => {
+  const pwd = password || ''; 
+  const requirements = [
+    { text: "8+ Characters", met: pwd.length >= 8 },
+    { text: "Uppercase Letter", met: /[A-Z]/.test(pwd) },
+    { text: "Lowercase Letter", met: /[a-z]/.test(pwd) },
+    { text: "Number (0-9)", met: /[0-9]/.test(pwd) },
+    { text: "Special Character (!@#...)", met: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd) },
+  ];
+
+  return (
+    <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100 animate-fade-in">
+      <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">Password Requirements:</p>
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1">
+        {requirements.map((req, i) => (
+          <li key={i} className={`flex items-center gap-2 text-xs transition-colors duration-200 ${req.met ? 'text-emerald-600 font-medium' : 'text-slate-400'}`}>
+            <span className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] transition-colors duration-200 ${req.met ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
+              {req.met ? '✓' : '•'}
+            </span>
+            {req.text}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
 export default function UserProfile() {
   const { user, isAuthenticated, authLoading } = useAuth();
   const router = useRouter();
@@ -50,16 +78,31 @@ export default function UserProfile() {
     setPwMessage({ type: '', text: '' });
 
     if (step === 1) {
-        if (pwForm.newPassword !== pwForm.confirmPassword) {
+        // --- 2. VALIDATION LOGIC ADDED HERE ---
+        const pwd = pwForm.newPassword;
+        if (pwd !== pwForm.confirmPassword) {
             setPwMessage({ type: 'error', text: 'New passwords do not match.' });
             return;
+        }
+
+        // Strict Check
+        const rules = [
+            { test: pwd.length >= 8, msg: "Password must be at least 8 characters." },
+            { test: /[A-Z]/.test(pwd), msg: "Password must contain an uppercase letter." },
+            { test: /[a-z]/.test(pwd), msg: "Password must contain a lowercase letter." },
+            { test: /[0-9]/.test(pwd), msg: "Password must contain a number." },
+            { test: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd), msg: "Password must contain a special character." },
+        ];
+
+        const failedRule = rules.find(r => !r.test);
+        if (failedRule) {
+            setPwMessage({ type: 'error', text: failedRule.msg });
+            return; // STOP submission
         }
         
         setIsPwSaving(true);
         try {
-
             await requestPasswordOTP(pwForm.currentPassword);
-
             setStep(2);
             setPwMessage({ type: 'success', text: 'OTP sent to your email. Please verify.' });
         } catch (err) {
@@ -78,7 +121,6 @@ export default function UserProfile() {
         setIsPwSaving(true);
         try {
             await changeUserPassword(otp, pwForm.newPassword);
-            
             setPwMessage({ type: 'success', text: 'Password changed successfully!' });
             setTimeout(() => {
                 handleCloseModal();
@@ -160,7 +202,7 @@ export default function UserProfile() {
 
       {showPwModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md animate-fade-in">
+          <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md animate-fade-in max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-slate-900 mb-6">
                 {step === 1 ? 'Update Password' : 'Verify Identity'}
             </h3>
@@ -210,6 +252,9 @@ export default function UserProfile() {
                         {showNew ? <EyeOpenIcon /> : <EyeClosedIcon />}
                       </button>
                     </div>
+                    
+                    {/* --- 3. CHECKLIST ADDED HERE --- */}
+                    <PasswordRequirements password={pwForm.newPassword} />
                   </div>
 
                   {/* Confirm Password */}
