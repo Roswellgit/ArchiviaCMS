@@ -17,11 +17,24 @@ import {
 
 // --- HELPER: CONFIRMATION MODAL ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
+  
+  // ✅ Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => { document.body.style.overflow = 'unset'; };
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
   return (
     // Fixed positioning ensures it covers the whole screen (viewport)
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in">
+      {/* Modal Container */}
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in relative">
         <div className="p-6 text-center">
           <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
           <p className="text-slate-600 text-sm mb-6">{message}</p>
@@ -186,7 +199,6 @@ export default function AdminDashboardPage() {
   if (loading || authLoading) return <div className="p-20 text-center text-slate-400">Loading dashboard...</div>;
 
   return (
-    // 👇 CHANGED: Using Fragment (<>...</>) to separate the scrolling content from the Fixed Modal
     <>
       <div className="space-y-12 animate-fade-in pb-24">
         
@@ -304,7 +316,7 @@ export default function AdminDashboardPage() {
 
       </div>
 
-      {/* 👇 MOVED OUTSIDE: This ensures the modal is fixed to the Viewport, not the scrolled content */}
+      {/* MODAL IS OUTSIDE THE SCROLL FLOW */}
       <ConfirmationModal 
         isOpen={confirmConfig.isOpen}
         onClose={() => setConfirmConfig({...confirmConfig, isOpen: false})}

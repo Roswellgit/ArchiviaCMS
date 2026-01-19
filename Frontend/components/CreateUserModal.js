@@ -87,6 +87,10 @@ const RequirementItem = ({ met, text }) => (
 const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   const { user } = useAuth(); 
 
+  // ✅ DEFINE ADVISOR STATUS UP FRONT
+  const roleName = (user?.role || '').toLowerCase();
+  const isAdvisor = !!user?.is_adviser || roleName === 'adviser' || roleName === 'advisor';
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -112,30 +116,58 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
     hasLength: false, hasUpper: false, hasLower: false, hasNumber: false, hasSpecial: false,
   });
 
-  // --- 1. SET MANAGE PERMISSION (SUPER ADMIN ONLY) ---
+  // ✅ PREVENT BACKGROUND SCROLLING
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => { document.body.style.overflow = 'unset'; };
+  }, [isOpen]);
+
+  // ✅ DETERMINE ROLE LIST (Lock to 'Student' if Advisor)
+  const effectiveRoles = isAdvisor ? ['Student'] : options.roles;
+
+  // --- 1. SET MANAGE PERMISSION ---
   useEffect(() => {
     if (isOpen) {
       fetchOptions();
       if (user) {
-        const role = (user.role || '').toLowerCase();
-        const isSuper = !!user.is_super_admin || role === 'super admin' || role === 'principal';
-        setCanManageOptions(isSuper);
+        const canManage = 
+            !!user.is_super_admin || 
+            !!user.is_admin || 
+            roleName === 'super admin' || 
+            roleName === 'principal' || 
+            roleName === 'admin'; 
+            
+        setCanManageOptions(canManage);
+
+        // ✅ AUTO-SELECT STUDENT ROLE FOR ADVISORS
+        if (isAdvisor) {
+            setRoleTitle('Student');
+        }
       }
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, isAdvisor, roleName]);
 
-  // --- 2. DEFINE STRICT HIERARCHY LEVELS ---
+  // --- 2. DEFINE HIERARCHY LEVELS ---
   const getAccessLevels = () => {
     if (!user) return [];
     
-    const role = (user.role || '').toLowerCase();
-    const isSuper = !!user.is_super_admin || role === 'super admin';
-    const isAdmin = !!user.is_admin || role === 'admin';
-    const isAdvisor = !!user.is_adviser || role === 'adviser' || role === 'advisor';
+    const isSuper = !!user.is_super_admin || roleName === 'super admin' || roleName === 'principal';
+    const isAdmin = !!user.is_admin || roleName === 'admin';
+    // Advisor check logic already handled by 'isAdvisor' const above
 
-    if (isSuper) return ['Admin'];
-    if (isAdmin) return ['Advisor'];
-    if (isAdvisor) return ['Student'];
+    if (isSuper) {
+        return ['Admin', 'Advisor', 'Student']; 
+    }
+    if (isAdmin) {
+        return ['Advisor', 'Student'];
+    }
+    if (isAdvisor) {
+        return ['Student'];
+    }
 
     return [];
   };
@@ -184,6 +216,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
     if (!allValid) {
         setError("Password does not meet complexity requirements.");
         setLoading(false);
+        document.querySelector('.overflow-y-auto')?.scrollTo(0,0);
         return;
     }
 
@@ -202,6 +235,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to create user.';
       setError(msg);
+      document.querySelector('.overflow-y-auto')?.scrollTo(0,0);
     } finally {
       setLoading(false);
     }
@@ -209,7 +243,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleClose = () => {
     setFormData({ firstName: '', lastName: '', email: '', password: '', schoolId: '' });
-    setRoleTitle('');
+    setRoleTitle(isAdvisor ? 'Student' : ''); // Reset logic respects advisor status
     setAccessLevel('');
     setYearLevel('');
     setStrand('');
@@ -224,8 +258,9 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   if (!isOpen) return null;
 
   return (
-    // 👇 UPDATED BACKGROUND HERE (bg-slate-900/50)
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+    // ✅ FIXED: Centering + z-index
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in p-4">
+      {/* Modal Container */}
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
           <h2 className="text-xl font-bold text-gray-800">Create New User</h2>
@@ -298,12 +333,13 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
           <hr className="border-gray-100 my-2" />
 
+          {/* ✅ PASSING FILTERED LIST HERE */}
           <ManageableSelect 
             label="Job Title / Role Name" 
             type="role" 
             value={roleTitle} 
             setValue={setRoleTitle} 
-            list={options.roles} 
+            list={effectiveRoles} 
             canManage={canManageOptions} 
             fetchOptions={fetchOptions}
           />
@@ -332,8 +368,8 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
               <ManageableSelect label="Year Level" type="yearLevel" value={yearLevel} setValue={setYearLevel} list={options.yearLevels} canManage={canManageOptions} fetchOptions={fetchOptions} />
               
               <div className="mb-4">
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
-                 <input value={section} onChange={(e) => setSection(e.target.value)} placeholder="e.g. A, B, St. Augustine" className="w-full px-4 py-2 border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" required />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                  <input value={section} onChange={(e) => setSection(e.target.value)} placeholder="e.g. A, B, St. Augustine" className="w-full px-4 py-2 border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" required />
               </div>
 
               {shouldShowStrand() && (
