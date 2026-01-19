@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom'; 
 import { 
   searchDocuments, 
   fetchPendingDocs, 
@@ -8,11 +9,18 @@ import {
   rejectDocument,
   adminDeleteDocument, 
   adminArchiveDocument, 
-  adminUpdateDocument, 
   adminRestoreDocument 
 } from '../../../services/apiService'; 
 import { useAuth } from '../../../context/AuthContext'; 
 import { toast } from 'react-hot-toast';
+
+// --- INTERNAL PORTAL COMPONENT ---
+const Portal = ({ children }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return createPortal(children, document.body);
+};
 
 export default function AdminDocumentManagement() {
   const [documents, setDocuments] = useState([]);
@@ -25,15 +33,31 @@ export default function AdminDocumentManagement() {
   const itemsPerPage = 10;
 
   // --- MODAL STATES ---
-
-  const [selectedDocument, setSelectedDocument] = useState(null);
-
-  // Archive Modal State (Only used for Archive because it needs a reason input)
+  
+  // 1. Archive Modal
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [docToArchive, setDocToArchive] = useState(null);
   const [archiveReason, setArchiveReason] = useState('');
+
+  // 2. Delete Modal
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [docToDelete, setDocToDelete] = useState(null);
+
+  // 3. Restore Modal (NEW)
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [docToRestore, setDocToRestore] = useState(null);
   
   const { user } = useAuth(); 
+
+  // Lock scroll when ANY modal is open
+  useEffect(() => {
+    if (isArchiveModalOpen || isDeleteModalOpen || isRestoreModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => { document.body.style.overflow = 'unset'; };
+  }, [isArchiveModalOpen, isDeleteModalOpen, isRestoreModalOpen]);
 
   useEffect(() => { 
     refreshData();
@@ -71,8 +95,6 @@ export default function AdminDocumentManagement() {
     handleSearch(searchTerm);
   };
 
-  // --- HELPER: Format Authors ---
-  // Keeps the logic to shorten the list, but allows the text itself to wrap
   const formatAuthors = (authors) => {
     if (!authors) return 'Unknown Author';
     if (typeof authors === 'string') return authors;
@@ -99,7 +121,6 @@ export default function AdminDocumentManagement() {
     }
   };
 
-  // --- TOAST CONFIRMATION FOR REJECT ---
   const handleReject = (docId) => {
     toast((t) => (
       <div className="flex flex-col gap-2">
@@ -127,7 +148,7 @@ export default function AdminDocumentManagement() {
     }
   };
 
-  // --- ARCHIVE LOGIC (Modal required for input) ---
+  // --- ARCHIVE HANDLERS ---
   const openArchiveModal = (doc) => {
     setDocToArchive(doc);
     setArchiveReason('');
@@ -151,44 +172,43 @@ export default function AdminDocumentManagement() {
     }
   };
 
-  const handleRestore = async (docId) => {
+  // --- RESTORE HANDLERS (NEW) ---
+  const openRestoreModal = (doc) => {
+    setDocToRestore(doc);
+    setIsRestoreModalOpen(true);
+  };
+
+  const executeRestore = async () => {
+    if (!docToRestore) return;
     try {
-        await adminRestoreDocument(docId);
+        await adminRestoreDocument(docToRestore.id);
         toast.success("Document restored.");
+        setIsRestoreModalOpen(false);
+        setDocToRestore(null);
         refreshData();
     } catch (err) {
         toast.error("Restore failed.");
     }
   };
 
-  // --- TOAST CONFIRMATION FOR DELETE ---
-  const handlePermanentDelete = (docId) => {
-    toast((t) => (
-      <div className="flex flex-col gap-2">
-        <p className="font-bold text-slate-800 text-sm">Permanently delete?</p>
-        <p className="text-xs text-slate-500">This action cannot be undone.</p>
-        <div className="flex gap-2 justify-end pt-1">
-          <button onClick={() => toast.dismiss(t.id)} className="text-xs text-slate-500 font-bold px-3 py-1 bg-slate-100 rounded hover:bg-slate-200">Cancel</button>
-          <button onClick={() => {
-             executeDelete(docId);
-             toast.dismiss(t.id);
-          }} className="text-xs bg-red-600 text-white font-bold px-3 py-1 rounded hover:bg-red-700">Delete</button>
-        </div>
-      </div>
-    ), { duration: Infinity, position: 'top-center', icon: '⚠️' }); 
+  // --- DELETE HANDLERS ---
+  const openDeleteModal = (doc) => {
+    setDocToDelete(doc);
+    setIsDeleteModalOpen(true);
   };
 
-  const executeDelete = async (docId) => {
+  const executeDelete = async () => {
+    if (!docToDelete) return;
     try {
-        await adminDeleteDocument(docId);
+        await adminDeleteDocument(docToDelete.id);
         toast.success("Document deleted.");
+        setIsDeleteModalOpen(false);
+        setDocToDelete(null);
         refreshData();
-    } catch (err) { toast.error("Delete failed."); }
+    } catch (err) { 
+        toast.error("Delete failed."); 
+    }
   };
-
-  
-
-
 
   // --- FILTERING ---
   let listToRender = [];
@@ -215,7 +235,7 @@ export default function AdminDocumentManagement() {
   return (
     <div className="space-y-6 pb-24 max-w-7xl mx-auto">
       
-      {/* HEADER: Centered Alignment */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-center border-b border-slate-200 pb-4 gap-4">
           <div className="w-full md:w-auto text-center md:text-left">
             <h2 className="text-3xl font-extrabold text-slate-900">Documents</h2>
@@ -274,18 +294,12 @@ export default function AdminDocumentManagement() {
             {currentItems.map(doc => (
                 <div key={doc.id} className="p-5 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     
-                    {/* FIX: 
-                       1. 'flex-1 min-w-0' ensures the text container shrinks to available space.
-                       2. Removed 'truncate' from children so they wrap.
-                       3. Added 'break-words' to force wrapping on long strings.
-                    */}
                     <div className="flex-1 min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-3">
                             <h3 className="text-lg font-bold text-slate-800 break-words leading-tight">
                                 {doc.title || "Untitled"}
                             </h3>
                             
-                            {/* Badges */}
                             {doc.deletion_requested && <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase shrink-0">Deletion Requested</span>}
                             {currentTab === 'pending' && <span className="bg-yellow-100 text-yellow-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase shrink-0">Pending</span>}
                         </div>
@@ -316,28 +330,27 @@ export default function AdminDocumentManagement() {
                            </>
                         ) : (
                            <>
+                             {(currentTab === 'active' && user?.is_super_admin) && <div className="hidden md:block h-4 w-px bg-slate-200"></div>}
                              
-                              
-                              {(currentTab === 'active' && user?.is_super_admin) && <div className="hidden md:block h-4 w-px bg-slate-200"></div>}
-                              
-                              {currentTab === 'active' ? (
-                                    <button onClick={() => openArchiveModal(doc)} className="text-sm font-semibold text-slate-500 hover:text-orange-600">
-                                      Archive
-                                    </button>
-                              ) : (
-                                    <button onClick={() => handleRestore(doc.id)} className="text-sm font-semibold text-green-600 hover:text-green-800">
-                                      Restore
-                                    </button>
-                              )}
-                              
-                              {user?.is_super_admin && (
-                                  <>
-                                      <div className="hidden md:block h-4 w-px bg-slate-200"></div>
-                                      <button onClick={() => handlePermanentDelete(doc.id)} className="text-sm font-semibold text-red-600 hover:text-red-800">
-                                        Delete
-                                      </button>
-                                  </>
-                              )}
+                             {currentTab === 'active' ? (
+                                  <button onClick={() => openArchiveModal(doc)} className="text-sm font-semibold text-slate-500 hover:text-orange-600">
+                                    Archive
+                                  </button>
+                             ) : (
+                                   // 👇 FIXED: Opens Modal instead of acting immediately
+                                   <button onClick={() => openRestoreModal(doc)} className="text-sm font-semibold text-green-600 hover:text-green-800">
+                                     Restore
+                                   </button>
+                             )}
+                             
+                             {user?.is_super_admin && (
+                                 <>
+                                     <div className="hidden md:block h-4 w-px bg-slate-200"></div>
+                                     <button onClick={() => openDeleteModal(doc)} className="text-sm font-semibold text-red-600 hover:text-red-800">
+                                       Delete
+                                     </button>
+                                 </>
+                             )}
                            </>
                         )}
                     </div>
@@ -368,42 +381,89 @@ export default function AdminDocumentManagement() {
         </>
       )}
       
-      
-
-      {/* ARCHIVE REASON MODAL */}
+      {/* 1. ARCHIVE REASON MODAL */}
       {isArchiveModalOpen && docToArchive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in">
-            <div className="p-6 border-b border-gray-100 bg-orange-50 flex justify-between items-center">
-               <h3 className="text-lg font-bold text-orange-800">Archive Document</h3>
-               <button onClick={() => setIsArchiveModalOpen(false)} className="text-orange-400 hover:text-orange-600 font-bold">✕</button>
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in relative">
+              <div className="p-6 border-b border-gray-100 bg-orange-50 flex justify-between items-center">
+                 <h3 className="text-lg font-bold text-orange-800">Archive Document</h3>
+                 <button onClick={() => setIsArchiveModalOpen(false)} className="text-orange-400 hover:text-orange-600 font-bold">✕</button>
+              </div>
+              
+              <form onSubmit={executeArchive} className="p-6 space-y-4">
+                 <p className="text-slate-600 text-sm">
+                   You are archiving <strong>{docToArchive.title}</strong>. It will be hidden from search results.
+                 </p>
+
+                 <div>
+                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reason for Archiving</label>
+                   <textarea 
+                     required
+                     className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                     rows="3"
+                     placeholder="e.g. Outdated content, duplicate entry..."
+                     value={archiveReason}
+                     onChange={(e) => setArchiveReason(e.target.value)}
+                   ></textarea>
+                 </div>
+
+                 <div className="flex gap-3 justify-end pt-2">
+                   <button type="button" onClick={() => setIsArchiveModalOpen(false)} className="px-4 py-2 text-slate-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium">Cancel</button>
+                   <button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-bold hover:bg-orange-700 shadow-md">Archive</button>
+                 </div>
+              </form>
             </div>
-            
-            <form onSubmit={executeArchive} className="p-6 space-y-4">
-               <p className="text-slate-600 text-sm">
-                 You are archiving <strong>{docToArchive.title}</strong>. It will be hidden from search results.
-               </p>
-
-               <div>
-                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reason for Archiving</label>
-                 <textarea 
-                   required
-                   className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
-                   rows="3"
-                   placeholder="e.g. Outdated content, duplicate entry..."
-                   value={archiveReason}
-                   onChange={(e) => setArchiveReason(e.target.value)}
-                 ></textarea>
-               </div>
-
-               <div className="flex gap-3 justify-end pt-2">
-                 <button type="button" onClick={() => setIsArchiveModalOpen(false)} className="px-4 py-2 text-slate-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium">Cancel</button>
-                 <button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-bold hover:bg-orange-700 shadow-md">Archive</button>
-               </div>
-            </form>
           </div>
-        </div>
+        </Portal>
       )}
+
+      {/* 2. DELETE CONFIRMATION MODAL */}
+      {isDeleteModalOpen && docToDelete && (
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in relative">
+              <div className="p-6 text-center">
+                <h3 className="text-lg font-bold mb-2 text-red-600">Permanently Delete?</h3>
+                <p className="text-slate-600 text-sm mb-6">
+                  Are you sure you want to delete <strong>{docToDelete.title}</strong>? <br/>
+                  This action cannot be undone.
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition">Cancel</button>
+                  <button onClick={executeDelete} className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 transition">
+                    Yes, Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {/* 3. RESTORE CONFIRMATION MODAL */}
+      {isRestoreModalOpen && docToRestore && (
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in relative">
+              <div className="p-6 text-center">
+                <h3 className="text-lg font-bold mb-2 text-green-700">Restore Document?</h3>
+                <p className="text-slate-600 text-sm mb-6">
+                  Are you sure you want to restore <strong>{docToRestore.title}</strong>?<br/>
+                  It will become visible in the library again.
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <button onClick={() => setIsRestoreModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition">Cancel</button>
+                  <button onClick={executeRestore} className="px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 transition">
+                    Yes, Restore
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+
     </div>
   );
 }
