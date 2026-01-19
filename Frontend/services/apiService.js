@@ -2,12 +2,10 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-
 const api = axios.create({
     baseURL: API_URL,
     withCredentials: true 
 });
-
 
 api.interceptors.request.use(
     (config) => {
@@ -21,7 +19,6 @@ api.interceptors.request.use(
         return Promise.reject(error);
     }
 );
-
 
 export const setAuthToken = (token) => {
     if (token) {
@@ -66,7 +63,6 @@ export const logout = () => {
     return Promise.resolve();
 };
 export const getProfile = () => api.get('/auth/profile');
-
 
 export const updateProfile = (data) => api.put('/auth/profile', data);
 export const updateUserProfile = updateProfile; 
@@ -131,7 +127,6 @@ export const adminUpdateSettings = updateSettings;
 export const resetSettings = () => api.post('/admin/settings/reset');
 export const adminResetSettings = resetSettings;
 
-
 export const uploadIcon = (formData, onUploadProgress) => api.post('/admin/icon-upload', formData, {
     onUploadProgress
 });
@@ -153,29 +148,22 @@ export const adminRemoveBgImage = removeBgImage;
 export const removeBrandIcon = () => api.post('/admin/remove-brand-icon');
 export const adminRemoveBrandIcon = removeBrandIcon;
 
-export const adminCreateUser = async (userData) => {
-  const token = localStorage.getItem('token');
-  
-  const response = await axios.post(`${API_URL}/admin/create-account`, userData, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  return response.data;
-};
+// ✅ FIXED: Now matches backend route ('/admin/users') and uses 'api' instance
+export const adminCreateUser = (userData) => api.post('/admin/users', userData);
 
 export const fetchPendingDocs = async () => {
-    
-  const response = await api.get('/admin/documents/pending');
-  return response.data;
+    const response = await api.get('/admin/documents/pending');
+    return response.data;
 };
 
 export const approveDocument = async (id) => {
-  const response = await api.put(`/admin/documents/${id}/approve`);
-  return response.data;
+    const response = await api.put(`/admin/documents/${id}/approve`);
+    return response.data;
 };
 
 export const rejectDocument = async (id) => {
-  const response = await api.put(`/admin/documents/${id}/reject`);
-  return response.data;
+    const response = await api.put(`/admin/documents/${id}/reject`);
+    return response.data;
 };
 
 export const getFormOptions = () => api.get('/admin/options');
