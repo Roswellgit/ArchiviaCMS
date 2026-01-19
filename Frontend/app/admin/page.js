@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom'; // 👈 Import createPortal
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
@@ -17,8 +18,15 @@ import {
 
 // --- HELPER: CONFIRMATION MODAL ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
-  
-  // ✅ Prevent background scrolling when modal is open
+  const [mounted, setMounted] = useState(false);
+
+  // 1. Handle Mounting for Portal Safety
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // 2. Prevent background scrolling when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -28,10 +36,10 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
     return () => { document.body.style.overflow = 'unset'; };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
-    // Fixed positioning ensures it covers the whole screen (viewport)
+  // 3. Use Portal to render outside the current DOM hierarchy
+  return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
       {/* Modal Container */}
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in relative">
@@ -46,11 +54,12 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body // 👈 Target container
   );
 };
 
-// --- HELPER COMPONENT: REQUEST TABLE ---
+// --- HELPER COMPONENT: REQUEST TABLE (Unchanged) ---
 const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon }) => (
   <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col w-full h-full">
     {/* Header */}
@@ -59,7 +68,7 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
           <span className="text-xl">{icon}</span>
           <h3 className={`font-bold text-lg ${colorClass}`}>{title}</h3>
        </div>
-       <span className={`px-2 py-1 rounded text-xs font-bold bg-white border border-slate-100 shadow-sm ${colorClass}`}>
+       <span className={`px-2 py-1 rounded-xs font-bold bg-white border border-slate-100 shadow-sm ${colorClass}`}>
           {items.length} Pending
        </span>
     </div>
@@ -316,7 +325,7 @@ export default function AdminDashboardPage() {
 
       </div>
 
-      {/* MODAL IS OUTSIDE THE SCROLL FLOW */}
+      {/* MODAL IS NOW PORTALED OUTSIDE THE SCROLL FLOW */}
       <ConfirmationModal 
         isOpen={confirmConfig.isOpen}
         onClose={() => setConfirmConfig({...confirmConfig, isOpen: false})}

@@ -1,34 +1,44 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom'; // 👈 Import createPortal
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../context/AuthContext';
 import api, { getAllUsers, adminDeleteUser, getFormOptions } from '../../../services/apiService';
 
-// Import the component we fixed
 import CreateUserModal from '../../../components/CreateUserModal'; 
+
+// --- 1. INTERNAL PORTAL HELPER (Fixes Centering) ---
+const Portal = ({ children }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return createPortal(children, document.body);
+};
 
 // --- Reusable Confirmation Modal ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
   if (!isOpen) return null;
+  // 👇 WRAP IN PORTAL
   return (
-    // 👇 UPDATED BACKGROUND
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in border border-gray-100">
-        <div className="p-6 text-center">
-          <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
-          <p className="text-slate-600 text-sm mb-6">{message}</p>
-          <div className="flex gap-3 justify-center">
-            <button onClick={onClose} className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition">Cancel</button>
-            <button onClick={onConfirm} className={`px-4 py-2 text-white font-bold rounded-lg shadow-md transition ${isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-              {confirmText || 'Confirm'}
-            </button>
+    <Portal>
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in border border-gray-100">
+          <div className="p-6 text-center">
+            <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
+            <p className="text-slate-600 text-sm mb-6">{message}</p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={onClose} className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition">Cancel</button>
+              <button onClick={onConfirm} className={`px-4 py-2 text-white font-bold rounded-lg shadow-md transition ${isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                {confirmText || 'Confirm'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Portal>
   );
 };
 
@@ -332,102 +342,108 @@ export default function ManageUsersPage() {
 
       {/* ARCHIVE USER MODAL */}
       {showArchiveModal && userToArchive && (
-        // 👇 UPDATED BACKGROUND
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
-            <div className="p-6 border-b border-gray-100 bg-red-50 flex justify-between items-center">
-               <h3 className="text-lg font-bold text-red-800">Archive User</h3>
-               <button onClick={() => setShowArchiveModal(false)} className="text-red-400 hover:text-red-600 font-bold">✕</button>
+        // 👇 WRAP IN PORTAL
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+              <div className="p-6 border-b border-gray-100 bg-red-50 flex justify-between items-center">
+                 <h3 className="text-lg font-bold text-red-800">Archive User</h3>
+                 <button onClick={() => setShowArchiveModal(false)} className="text-red-400 hover:text-red-600 font-bold">✕</button>
+              </div>
+              <form onSubmit={handleConfirmArchive} className="p-6 space-y-4">
+                 <p className="text-slate-600 text-sm">
+                   Are you sure you want to archive <strong>{userToArchive.first_name} {userToArchive.last_name}</strong>?
+                   They will no longer be able to log in.
+                 </p>
+                 <div>
+                   <label className="block text-sm font-bold text-slate-700 mb-1">Reason for Archiving</label>
+                   <textarea 
+                     required
+                     className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                     rows="3"
+                     placeholder="e.g. Graduated, Transferred, Policy Violation..."
+                     value={archiveReason}
+                     onChange={(e) => setArchiveReason(e.target.value)}
+                   ></textarea>
+                 </div>
+                 <div className="flex gap-3 justify-end pt-2">
+                   <button type="button" onClick={() => setShowArchiveModal(false)} className="px-4 py-2 text-slate-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium">Cancel</button>
+                   <button type="submit" className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700">Archive User</button>
+                 </div>
+              </form>
             </div>
-            <form onSubmit={handleConfirmArchive} className="p-6 space-y-4">
-               <p className="text-slate-600 text-sm">
-                 Are you sure you want to archive <strong>{userToArchive.first_name} {userToArchive.last_name}</strong>?
-                 They will no longer be able to log in.
-               </p>
-               <div>
-                 <label className="block text-sm font-bold text-slate-700 mb-1">Reason for Archiving</label>
-                 <textarea 
-                   required
-                   className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                   rows="3"
-                   placeholder="e.g. Graduated, Transferred, Policy Violation..."
-                   value={archiveReason}
-                   onChange={(e) => setArchiveReason(e.target.value)}
-                 ></textarea>
-               </div>
-               <div className="flex gap-3 justify-end pt-2">
-                 <button type="button" onClick={() => setShowArchiveModal(false)} className="px-4 py-2 text-slate-600 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium">Cancel</button>
-                 <button type="submit" className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700">Archive User</button>
-               </div>
-            </form>
           </div>
-        </div>
+        </Portal>
       )}
 
       {/* MANAGE GROUP MEMBERS MODAL */}
       {showMembersModal && selectedGroup && (
-        // 👇 UPDATED BACKGROUND
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
-                   <div><h3 className="text-xl font-bold text-slate-800">Manage Members</h3><p className="text-sm text-slate-500">Group: {selectedGroup.name}</p></div>
-                   <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
-                </div>
-                <div className="p-6 overflow-y-auto flex-1 space-y-6">
-                    <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                        <label className="block text-sm font-bold text-indigo-900 mb-2">Add Active Student to Group</label>
-                        <div className="flex gap-2">
-                            <select className="flex-1 p-2 border border-indigo-200 rounded-lg text-sm" value={selectedStudentToAdd} onChange={(e) => setSelectedStudentToAdd(e.target.value)}>
-                                <option value="">-- Select Student --</option>
-                                {availableStudents.map(student => (
-                                    <option key={student.id} value={student.id}>{student.first_name} {student.last_name} ({student.email})</option>
-                                ))}
-                            </select>
-                            <button onClick={handleAddMember} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition">Add</button>
-                        </div>
-                    </div>
-                    <div>
-                        <h4 className="font-bold text-slate-700 mb-3">Current Members ({groupMembers.length})</h4>
-                        <div className="border rounded-xl overflow-hidden">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 border-b"><tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Email</th><th className="px-4 py-2 text-right">Action</th></tr></thead>
-                                <tbody className="divide-y">
-                                    {groupMembers.map(member => (
-                                        <tr key={member.id} className="hover:bg-slate-50">
-                                            <td className="px-4 py-3 font-medium text-slate-900">{member.first_name} {member.last_name}</td>
-                                            <td className="px-4 py-3 text-slate-500">{member.email}</td>
-                                            <td className="px-4 py-3 text-right">
-                                              <button onClick={() => promptRemoveMember(member.id)} className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 px-2 py-1 rounded">Remove</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        // 👇 WRAP IN PORTAL
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                  <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+                     <div><h3 className="text-xl font-bold text-slate-800">Manage Members</h3><p className="text-sm text-slate-500">Group: {selectedGroup.name}</p></div>
+                     <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                  </div>
+                  <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                      <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                          <label className="block text-sm font-bold text-indigo-900 mb-2">Add Active Student to Group</label>
+                          <div className="flex gap-2">
+                              <select className="flex-1 p-2 border border-indigo-200 rounded-lg text-sm" value={selectedStudentToAdd} onChange={(e) => setSelectedStudentToAdd(e.target.value)}>
+                                  <option value="">-- Select Student --</option>
+                                  {availableStudents.map(student => (
+                                      <option key={student.id} value={student.id}>{student.first_name} {student.last_name} ({student.email})</option>
+                                  ))}
+                              </select>
+                              <button onClick={handleAddMember} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition">Add</button>
+                          </div>
+                      </div>
+                      <div>
+                          <h4 className="font-bold text-slate-700 mb-3">Current Members ({groupMembers.length})</h4>
+                          <div className="border rounded-xl overflow-hidden">
+                              <table className="w-full text-sm text-left">
+                                  <thead className="bg-slate-50 border-b"><tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Email</th><th className="px-4 py-2 text-right">Action</th></tr></thead>
+                                  <tbody className="divide-y">
+                                      {groupMembers.map(member => (
+                                          <tr key={member.id} className="hover:bg-slate-50">
+                                              <td className="px-4 py-3 font-medium text-slate-900">{member.first_name} {member.last_name}</td>
+                                              <td className="px-4 py-3 text-slate-500">{member.email}</td>
+                                              <td className="px-4 py-3 text-right">
+                                                  <button onClick={() => promptRemoveMember(member.id)} className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 px-2 py-1 rounded">Remove</button>
+                                              </td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+        </Portal>
       )}
 
       {/* CREATE GROUP MODAL */}
       {showGroupModal && (
-        // 👇 UPDATED BACKGROUND
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
-               <h3 className="text-xl font-bold text-slate-800">Create Research Group</h3>
-               <button onClick={() => setShowGroupModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+        // 👇 WRAP IN PORTAL
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+                 <h3 className="text-xl font-bold text-slate-800">Create Research Group</h3>
+                 <button onClick={() => setShowGroupModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+              </div>
+              <form onSubmit={handleCreateGroup} className="p-6 space-y-4">
+                 <div><label className="block text-sm font-bold text-slate-700 mb-1">Group Name</label><input required className="w-full p-2 border rounded-lg" placeholder="e.g. Research Team A" value={newGroup.name} onChange={e => setNewGroup({...newGroup, name: e.target.value})} /></div>
+                 <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">Create Group</button>
+              </form>
             </div>
-            <form onSubmit={handleCreateGroup} className="p-6 space-y-4">
-               <div><label className="block text-sm font-bold text-slate-700 mb-1">Group Name</label><input required className="w-full p-2 border rounded-lg" placeholder="e.g. Research Team A" value={newGroup.name} onChange={e => setNewGroup({...newGroup, name: e.target.value})} /></div>
-               <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">Create Group</button>
-            </form>
           </div>
-        </div>
+        </Portal>
       )}
 
-      {/* CREATE USER MODAL (External Component) */}
+      {/* CREATE USER MODAL (External Component - Already Fixed) */}
       <CreateUserModal 
         isOpen={showUserModal} 
         onClose={() => setShowUserModal(false)} 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom'; // 👈 IMPORT THIS
 import { 
   adminCreateUser, 
   getFormOptions, 
@@ -7,7 +8,7 @@ import {
 } from '../services/apiService'; 
 import { useAuth } from '../context/AuthContext'; 
 
-// --- HELPER: Manageable Select ---
+// --- HELPER: Manageable Select (Unchanged) ---
 const ManageableSelect = ({ label, type, value, setValue, list, canManage, fetchOptions }) => {
   const [isManaging, setIsManaging] = useState(false);
   const [newItem, setNewItem] = useState('');
@@ -74,7 +75,7 @@ const ManageableSelect = ({ label, type, value, setValue, list, canManage, fetch
   );
 };
 
-// --- HELPER: Password Requirement ---
+// --- HELPER: Password Requirement (Unchanged) ---
 const RequirementItem = ({ met, text }) => (
   <li className={`flex items-center gap-2 text-xs ${met ? 'text-emerald-600 font-medium' : 'text-slate-400'}`}>
     <span className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] ${met ? 'bg-emerald-100' : 'bg-slate-100'}`}>
@@ -87,36 +88,36 @@ const RequirementItem = ({ met, text }) => (
 const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   const { user } = useAuth(); 
 
-  // ✅ DEFINE ADVISOR STATUS UP FRONT
+  // 1. ADD MOUNTED STATE FOR NEXT.JS PORTAL SAFETY
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
   const roleName = (user?.role || '').toLowerCase();
   const isAdvisor = !!user?.is_adviser || roleName === 'adviser' || roleName === 'advisor';
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    schoolId: '', 
+    firstName: '', lastName: '', email: '', password: '', schoolId: '', 
   });
 
   const [options, setOptions] = useState({ roles: [], yearLevels: [], strands: [] });
   const [roleTitle, setRoleTitle] = useState(''); 
   const [accessLevel, setAccessLevel] = useState(''); 
-
   const [yearLevel, setYearLevel] = useState('');
   const [strand, setStrand] = useState('');
   const [section, setSection] = useState('');
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [canManageOptions, setCanManageOptions] = useState(false);
-
   const [showPassword, setShowPassword] = useState(false);
   const [passwordValidity, setPasswordValidity] = useState({
     hasLength: false, hasUpper: false, hasLower: false, hasNumber: false, hasSpecial: false,
   });
 
-  // ✅ PREVENT BACKGROUND SCROLLING
+  // Lock background scroll when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -126,58 +127,33 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
     return () => { document.body.style.overflow = 'unset'; };
   }, [isOpen]);
 
-  // ✅ DETERMINE ROLE LIST (Lock to 'Student' if Advisor)
   const effectiveRoles = isAdvisor ? ['Student'] : options.roles;
 
-  // --- 1. SET MANAGE PERMISSION ---
   useEffect(() => {
     if (isOpen) {
       fetchOptions();
       if (user) {
-        const canManage = 
-            !!user.is_super_admin || 
-            !!user.is_admin || 
-            roleName === 'super admin' || 
-            roleName === 'principal' || 
-            roleName === 'admin'; 
-            
+        const canManage = !!user.is_super_admin || !!user.is_admin || roleName === 'super admin' || roleName === 'principal' || roleName === 'admin'; 
         setCanManageOptions(canManage);
-
-        // ✅ AUTO-SELECT STUDENT ROLE FOR ADVISORS
-        if (isAdvisor) {
-            setRoleTitle('Student');
-        }
+        if (isAdvisor) setRoleTitle('Student');
       }
     }
   }, [isOpen, user, isAdvisor, roleName]);
 
-  // --- 2. DEFINE HIERARCHY LEVELS ---
   const getAccessLevels = () => {
     if (!user) return [];
-    
     const isSuper = !!user.is_super_admin || roleName === 'super admin' || roleName === 'principal';
     const isAdmin = !!user.is_admin || roleName === 'admin';
-    // Advisor check logic already handled by 'isAdvisor' const above
-
-    if (isSuper) {
-        return ['Admin', 'Advisor', 'Student']; 
-    }
-    if (isAdmin) {
-        return ['Advisor', 'Student'];
-    }
-    if (isAdvisor) {
-        return ['Student'];
-    }
-
+    if (isSuper) return ['Admin', 'Advisor', 'Student']; 
+    if (isAdmin) return ['Advisor', 'Student'];
+    if (isAdvisor) return ['Student'];
     return [];
   };
 
   useEffect(() => {
     if (isOpen) {
         const levels = getAccessLevels();
-        if (levels.length === 1) {
-            setAccessLevel(levels[0]);
-        }
+        if (levels.length === 1) setAccessLevel(levels[0]);
     }
   }, [isOpen, user]);
 
@@ -216,7 +192,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
     if (!allValid) {
         setError("Password does not meet complexity requirements.");
         setLoading(false);
-        document.querySelector('.overflow-y-auto')?.scrollTo(0,0);
+        document.getElementById('modal-scroll-area')?.scrollTo(0,0);
         return;
     }
 
@@ -235,7 +211,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to create user.';
       setError(msg);
-      document.querySelector('.overflow-y-auto')?.scrollTo(0,0);
+      document.getElementById('modal-scroll-area')?.scrollTo(0,0);
     } finally {
       setLoading(false);
     }
@@ -243,7 +219,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleClose = () => {
     setFormData({ firstName: '', lastName: '', email: '', password: '', schoolId: '' });
-    setRoleTitle(isAdvisor ? 'Student' : ''); // Reset logic respects advisor status
+    setRoleTitle(isAdvisor ? 'Student' : ''); 
     setAccessLevel('');
     setYearLevel('');
     setStrand('');
@@ -255,26 +231,41 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  if (!isOpen) return null;
+  // 2. CHECK IF MOUNTED BEFORE RENDERING PORTAL
+  if (!isOpen || !mounted) return null;
 
-  return (
-    // ✅ FIXED: Centering + z-index
+  // 3. USE PORTAL TO ATTACH TO BODY
+  return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in p-4">
-      {/* Modal Container */}
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+      
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col relative">
+        
+        {/* HEADER */}
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl shrink-0">
           <h2 className="text-xl font-bold text-gray-800">Create New User</h2>
-          <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 transition-colors">✕</button>
+          <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 transition-colors text-2xl leading-none">&times;</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {/* BODY */}
+        <form 
+            id="modal-scroll-area"
+            onSubmit={handleSubmit} 
+            className="p-6 space-y-4 overflow-y-auto flex-1"
+        >
           {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center border border-red-100">{error}</div>}
 
           {/* Name Fields */}
           <div className="grid grid-cols-2 gap-4">
             <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">First Name</label>
-                <input name="firstName" required value={formData.firstName} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input 
+                  autoFocus 
+                  name="firstName" 
+                  required 
+                  value={formData.firstName} 
+                  onChange={handleChange} 
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                />
             </div>
             <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Last Name</label>
@@ -333,7 +324,6 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
           <hr className="border-gray-100 my-2" />
 
-          {/* ✅ PASSING FILTERED LIST HERE */}
           <ManageableSelect 
             label="Job Title / Role Name" 
             type="role" 
@@ -352,9 +342,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
                 required
               >
-                {/* Ensure a default value showing if no selection */}
                 {getAccessLevels().length > 1 && <option value="">Select Access Level...</option>}
-                
                 {getAccessLevels().map(level => (
                     <option key={level} value={level}>{level}</option>
                 ))}
@@ -380,7 +368,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
           )}
 
-          <div className="pt-4 flex justify-end gap-3">
+          <div className="pt-4 flex justify-end gap-3 pb-2">
             <button type="button" onClick={handleClose} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors">Cancel</button>
             <button type="submit" disabled={loading} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm disabled:opacity-50">
               {loading ? 'Creating...' : 'Create User'}
@@ -388,7 +376,8 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body // 👈 ATTACH TO BODY
   );
 };
 
