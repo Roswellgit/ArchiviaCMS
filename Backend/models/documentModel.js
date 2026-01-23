@@ -268,15 +268,27 @@ exports.autoArchiveOldDocuments = async () => {
     const { rowCount } = await db.query(
       `UPDATE documents 
        SET archive_requested = TRUE, 
-           archive_reason = 'System Auto-Archive: Document is older than 10 years.'
-       WHERE created_at < NOW() - INTERVAL '10 years' 
-         AND archive_requested = FALSE` 
+           archive_reason = 'System Auto-Archive: Document content is older than 10 years.'
+       WHERE 
+         ai_date_created IS NOT NULL 
+         AND (
+            -- Case 1: Standard Date Format (YYYY-MM-DD)
+            (ai_date_created ~ '^\\d{4}-\\d{2}-\\d{2}$' AND ai_date_created::date < NOW() - INTERVAL '10 years')
+            OR
+            -- Case 2: Year Only Format (YYYY) -> Treat as January 1st
+            (ai_date_created ~ '^\\d{4}$' AND (ai_date_created || '-01-01')::date < NOW() - INTERVAL '10 years')
+         )
+         AND (archive_requested IS FALSE OR archive_requested IS NULL)` 
     );
+
     if (rowCount > 0) {
-        console.log(`Auto-Archiver: Flagged ${rowCount} documents older than 10 years.`);
+        console.log(`[Auto-Archiver] Flagged ${rowCount} documents based on content date.`);
+    } else {
+        console.log("[Auto-Archiver] No old documents found to archive.");
     }
+    
     return rowCount;
   } catch (err) {
-    console.error("Auto-Archive Error:", err.message);
+    console.error("[Auto-Archive Error] Database query failed:", err.message);
   }
 };
