@@ -173,7 +173,7 @@ export const adminCreateUser = async (userData) => {
   const token = localStorage.getItem('token');
   // Adjust the endpoint path if your backend route is different (e.g., /auth/register or /admin/create-account)
   // Based on your adminController, it seems to be an admin specific route.
-  const response = await axios.post(`${API_URL}/admin/create-account`, userData, {
+  const response = await axios.post(`${API_URL}/admin/users`, userData, {
     headers: { Authorization: `Bearer ${token}` }
   });
   return response.data;

@@ -351,42 +351,44 @@ exports.approveDocument = async (req, res) => {
   }
 };
 
-// ✅ ROBUST REJECTION FUNCTION
+// ✅ REJECT = PERMANENT DELETE + NOTIFICATION
 exports.rejectDocument = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // 🛡️ SAFETY CHECK 1: Handle missing body to prevent crash
-    const { reason } = req.body || {}; 
+    const { reason } = req.body || {}; // Safety check for body
 
-    // 1. Update status in DB
-    const doc = await documentModel.updateStatus(id, 'rejected');
-    if (!doc) return res.status(404).json({ message: "Document not found" });
+    // 1. GET DATA FIRST: We must fetch owner info BEFORE deleting the record
+    const owner = await userModel.getDocumentOwnerEmail(id);
 
-    // 2. Email Notification (Wrapped in its own try/catch so it doesn't crash the response)
+    if (!owner) {
+        return res.status(404).json({ message: "Document not found" });
+    }
+
+    // 2. SEND NOTIFICATION (Try/Catch ensures email failure doesn't stop deletion)
     try {
-        const owner = await userModel.getDocumentOwnerEmail(id);
-        
-        if (owner && owner.email) {
+        if (owner.email) {
+            const finalReason = reason || 'No specific reason provided.';
+            
             await emailService.sendDocumentStatusUpdate(
                 owner.email, 
                 owner.first_name, 
                 owner.title, 
-                'rejected', 
-                reason || 'No specific reason provided.'
+                'rejected', // Status text for the email
+                finalReason
             );
-        } else {
-            console.warn(`[Notification Warning] No owner found for doc ${id}, skipping email.`);
         }
     } catch (emailErr) {
-        // Log error but DO NOT fail the request. The document is already rejected.
-        console.error("Email/DB Notification Failed (Non-fatal):", emailErr.message);
+        console.warn("Email Notification Failed (Non-fatal):", emailErr.message);
     }
 
-    res.json({ message: 'Document rejected successfully', doc });
+    // 3. PERMANENTLY DELETE: Remove from DB (and S3/Storage if your model handles it)
+    // Note: We use deleteDocument instead of updateStatus
+    await documentModel.deleteDocument(id); 
+
+    res.json({ message: 'Document rejected and permanently deleted.' });
 
   } catch (error) {
-    console.error("Reject Document Fatal Error:", error); 
+    console.error("Fatal Error Rejecting Document:", error);
     res.status(500).json({ error: 'Failed to reject document' });
   }
 };
