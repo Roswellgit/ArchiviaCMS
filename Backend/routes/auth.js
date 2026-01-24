@@ -23,4 +23,7 @@ router.post('/request-password-otp', verifyToken, authController.requestPassword
 
 router.put('/change-password', verifyToken, authController.changePassword);
 
+// ✅ NEW: Route for direct password change (Used by First Login Modal)
+router.put('/change-password-direct', verifyToken, authController.changePasswordDirect);
+
 module.exports = router;

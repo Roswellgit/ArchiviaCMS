@@ -11,6 +11,25 @@ const emailService = require('../services/emailService');
 const aiService = require('../services/aiService');
 const pool = require('../db');
 
+// ✅ HELPER: Generate Secure Random Password
+const generateSecurePassword = (length = 12) => {
+  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+  let password = "";
+  // Ensure strict requirements are met (1 Upper, 1 Lower, 1 Number, 1 Special)
+  password += "A"; 
+  password += "a"; 
+  password += "1"; 
+  password += "!"; 
+  
+  // Fill the rest randomly
+  for (let i = 0; i < length - 4; i++) {
+    password += charset.charAt(Math.floor(Math.random() * charset.length));
+  }
+  
+  // Shuffle the password to mix the forced characters
+  return password.split('').sort(() => 0.5 - Math.random()).join('');
+};
+
 // ==========================================
 // 1. ACCOUNT & GROUP CREATION
 // ==========================================
@@ -18,12 +37,21 @@ const pool = require('../db');
 exports.createAccount = async (req, res) => {
   const client = await pool.connect(); 
   try {
-    const { firstName, lastName, email, password, role, accessLevel, schoolId, studentProfile, groupId } = req.body;
+    // ✅ MODIFIED: Removed 'password' from request body destructuring.
+    // We ignore any password sent by the frontend.
+    const { firstName, lastName, email, role, accessLevel, schoolId, studentProfile, groupId } = req.body;
+    
     const requester = req.user; 
 
-    if (!firstName || !lastName || !email || !password || !accessLevel || !schoolId) {
+    if (!firstName || !lastName || !email || !accessLevel || !schoolId) {
       return res.status(400).json({ message: 'All fields (including ID) are required' });
     }
+
+    // ✅ FORCE RANDOM PASSWORD GENERATION
+    // This ignores any user input for password and enforces system generation
+    const tempPassword = generateSecurePassword();
+    // We use this generated password for hashing and emailing
+    const password = tempPassword; 
 
     // ==========================================
     // ✅ STRICT ROLE HIERARCHY ENFORCEMENT
@@ -78,13 +106,14 @@ exports.createAccount = async (req, res) => {
     const isAdminFlag = finalRole === 'admin' || isSuperAdminFlag;
     const isAdviserFlag = finalRole === 'adviser';
     
+    // ✅ INSERT USER with force_password_change = TRUE
     const insertUserQuery = `
       INSERT INTO users (
         first_name, last_name, email, password_hash, 
         role, is_admin, is_super_admin, is_adviser, 
-        is_active, is_verified, school_id, group_id
+        is_active, is_verified, school_id, group_id, force_password_change
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, true, $9, $10) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, true, $9, $10, true) 
       RETURNING id, email, role
     `;
     
@@ -107,11 +136,14 @@ exports.createAccount = async (req, res) => {
     }
 
     await client.query('COMMIT'); 
+    
+    // Send email with the generated temporary password
     emailService.sendWelcomeEmail(email, firstName, password).catch(console.error);
 
     res.status(201).json({
       message: `Account created successfully as ${finalRole}.`,
-      user: userResult.rows[0]
+      user: userResult.rows[0],
+      tempPassword: tempPassword // Returned for Admin's immediate view/copy
     });
 
   } catch (error) {

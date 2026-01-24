@@ -1,9 +1,9 @@
 const db = require('../db');
 
-// --- UPDATED: Added 'is_adviser' to the select list ---
+// --- UPDATED: Added 'force_password_change' to the select list ---
 exports.findByEmail = async (email) => {
   const { rows } = await db.query(
-    'SELECT id, first_name, role, last_name, email, password_hash, is_admin, is_super_admin, is_adviser, is_verified, otp_code, otp_expires, is_active, job_title FROM users WHERE email = $1',
+    'SELECT id, first_name, role, last_name, email, password_hash, is_admin, is_super_admin, is_adviser, is_verified, otp_code, otp_expires, is_active, job_title, force_password_change FROM users WHERE email = $1',
     [email]
   );
   return rows[0];
@@ -42,10 +42,11 @@ exports.createAccount = async ({ firstName, lastName, email, passwordHash, role,
   // Ensure groupId is null if not provided
   const groupValue = groupId || null;
 
+  // ✅ UPDATED: Insert force_password_change = TRUE for admin-created accounts
   const { rows } = await db.query(
     `INSERT INTO users 
-      (first_name, last_name, email, password_hash, role, is_admin, is_super_admin, is_adviser, is_verified, is_active, group_id) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, TRUE, $9) 
+      (first_name, last_name, email, password_hash, role, is_admin, is_super_admin, is_adviser, is_verified, is_active, group_id, force_password_change) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, TRUE, $9, TRUE) 
       RETURNING id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser`,
     [firstName, lastName, email, passwordHash, role, isAdmin, isSuperAdmin, isAdviser, groupValue]
   );
@@ -107,10 +108,11 @@ exports.removeStudentFromGroup = async (userId) => {
 // ==========================================
 
 exports.createWithOTP = async ({ firstName, lastName, email, passwordHash, otp, otpExpires }) => {
+  // Self-registered users set their own password, so force_password_change is FALSE (Default)
   const { rows } = await db.query(
-    `INSERT INTO users (first_name, last_name, email, password_hash, otp_code, otp_expires, is_verified, is_active, role) 
-      VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, 'student') 
-      RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
+    `INSERT INTO users (first_name, last_name, email, password_hash, otp_code, otp_expires, is_verified, is_active, role, force_password_change) 
+     VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, 'student', FALSE) 
+     RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
     [firstName, lastName, email, passwordHash, otp, otpExpires]
   );
   return rows[0];
@@ -118,9 +120,9 @@ exports.createWithOTP = async ({ firstName, lastName, email, passwordHash, otp, 
 
 exports.create = async ({ firstName, lastName, email, passwordHash }) => {
   const { rows } = await db.query(
-    `INSERT INTO users (first_name, last_name, email, password_hash, is_active, role) 
-      VALUES ($1, $2, $3, $4, TRUE, 'student') 
-      RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
+    `INSERT INTO users (first_name, last_name, email, password_hash, is_active, role, force_password_change) 
+     VALUES ($1, $2, $3, $4, TRUE, 'student', FALSE) 
+     RETURNING id, first_name, last_name, email, is_admin, is_super_admin`,
     [firstName, lastName, email, passwordHash]
   );
   return rows[0];
@@ -146,7 +148,6 @@ exports.updateAdminStatus = async (userId, isAdminBoolean) => {
   return rows[0];
 };
 
-// --- UPDATED: Added is_adviser to RETURNING ---
 exports.updateUserDetails = async (userId, { first_name, last_name, email, is_admin }) => {
   const { rows } = await db.query(
     `UPDATE users 
@@ -158,7 +159,6 @@ exports.updateUserDetails = async (userId, { first_name, last_name, email, is_ad
   return rows[0];
 };
 
-// --- UPDATED: Added is_adviser to RETURNING ---
 exports.updateProfile = async (userId, { firstName, lastName, email }) => {
   const { rows } = await db.query(
     `UPDATE users 
@@ -217,8 +217,8 @@ exports.revokeArchiveRequest = async (id) => {
 exports.createGoogleUser = async ({ email, firstName, lastName, passwordHash }) => {
   const { rows } = await db.query(
     `INSERT INTO users 
-      (first_name, last_name, email, password_hash, is_verified, is_active, role) 
-      VALUES ($1, $2, $3, $4, TRUE, TRUE, 'student') 
+      (first_name, last_name, email, password_hash, is_verified, is_active, role, force_password_change) 
+      VALUES ($1, $2, $3, $4, TRUE, TRUE, 'student', FALSE) 
       RETURNING id, first_name, last_name, email, is_admin`,
     [firstName, lastName, email, passwordHash] 
   );
@@ -240,17 +240,18 @@ exports.findByResetToken = async (token) => {
   return rows[0];
 };
 
+// ✅ UPDATED: Setting a new password clears the force_password_change flag
 exports.updatePassword = async (userId, passwordHash) => {
   await db.query(
-    'UPDATE users SET password_hash = $1, reset_password_token = NULL, reset_password_expires = NULL WHERE id = $2',
+    'UPDATE users SET password_hash = $1, reset_password_token = NULL, reset_password_expires = NULL, force_password_change = FALSE WHERE id = $2',
     [passwordHash, userId]
   );
 };
 
-// --- UPDATED: Added 'is_adviser' to the select list ---
+// --- UPDATED: Added 'force_password_change' to select ---
 exports.findById = async (id) => {
   const { rows } = await db.query(
-    'SELECT id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser, is_active FROM users WHERE id = $1', 
+    'SELECT id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser, is_active, force_password_change FROM users WHERE id = $1', 
     [id]
   );
   return rows[0];

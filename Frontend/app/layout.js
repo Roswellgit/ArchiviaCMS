@@ -4,7 +4,7 @@ import Navbar from "../components/Navibar";
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from '../context/AuthContext'; 
 import { Toaster } from 'react-hot-toast';
-
+import FirstLoginModal from "../components/FirstLoginModal"; // ✅ IMPORTED
 
 export const dynamic = 'force-dynamic'; 
 
@@ -23,13 +23,10 @@ export const metadata = {
   description: "A Capstone and Research Repository", 
 };
 
-
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 async function getSystemSettings() {
   try {
-   
     const res = await fetch(`${API_URL}/settings`, { 
       cache: 'no-store' 
     });
@@ -81,7 +78,7 @@ export default async function RootLayout({ children }) {
     <html lang="en">
       <head><style>{customStyles}</style></head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-       
+        
         <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}> 
           <AuthProvider> 
             <Toaster 
@@ -90,6 +87,11 @@ export default async function RootLayout({ children }) {
                 duration: 5000, 
               }}
             /> 
+            
+            {/* ✅ ADDED: Global First Login Modal */}
+            {/* It is hidden by default and only shows if user.force_password_change is true */}
+            <FirstLoginModal />
+            
             <Navbar />
             {children}
           </AuthProvider>

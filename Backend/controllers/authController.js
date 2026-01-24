@@ -58,7 +58,7 @@ exports.register = async (req, res) => {
     await db.query('DELETE FROM users WHERE id = $1', [user.id]); 
     return res.status(500).json({ message: 'Failed to send verification email. Please try again.' });
   }
-   
+    
     res.status(201).json({
         message: 'Registration successful. Please verify your email.',
         email: email, 
@@ -146,11 +146,11 @@ exports.login = async (req, res) => {
         userId: user.id, 
         email: user.email, 
         firstName: user.first_name, 
-        lastName: user.last_name,
+        lastName: user.last_name, 
         role: user.role, 
         is_admin: user.is_admin,
         is_super_admin: user.is_super_admin || false,
-        is_adviser: user.is_adviser // ✅ ADDED
+        is_adviser: user.is_adviser
       },
       JWT_SECRET,
       { expiresIn: '1h' }
@@ -166,7 +166,8 @@ exports.login = async (req, res) => {
         role: user.role, 
         is_admin: user.is_admin,
         is_super_admin: user.is_super_admin || false,
-        is_adviser: user.is_adviser // ✅ ADDED
+        is_adviser: user.is_adviser,
+        force_password_change: user.force_password_change // ✅ ADDED: Send flag to frontend
       } 
     });
 
@@ -224,7 +225,7 @@ exports.googleLogin = async (req, res) => {
         role: user.role, 
         is_admin: user.is_admin,
         is_super_admin: user.is_super_admin || false,
-        is_adviser: user.is_adviser // ✅ ADDED
+        is_adviser: user.is_adviser
       },
       JWT_SECRET,
       { expiresIn: '1h' }
@@ -240,7 +241,8 @@ exports.googleLogin = async (req, res) => {
         role: user.role, 
         is_admin: user.is_admin,
         is_super_admin: user.is_super_admin || false,
-        is_adviser: user.is_adviser // ✅ ADDED
+        is_adviser: user.is_adviser,
+        force_password_change: false // Google Users don't need this flow usually
       } 
     });
 
@@ -266,7 +268,8 @@ exports.getProfile = async (req, res) => {
       role: user.role, 
       is_admin: user.is_admin,
       is_super_admin: user.is_super_admin,
-      is_adviser: user.is_adviser // ✅ ADDED
+      is_adviser: user.is_adviser,
+      force_password_change: user.force_password_change // ✅ ADDED
     });
   } catch (err) {
     console.error(err.message);
@@ -356,7 +359,7 @@ exports.verifyUpdateProfile = async (req, res) => {
         role: updatedUser.role, 
         is_admin: updatedUser.is_admin,
         is_super_admin: updatedUser.is_super_admin || false,
-        is_adviser: updatedUser.is_adviser // ✅ ADDED
+        is_adviser: updatedUser.is_adviser
       },
       JWT_SECRET,
       { expiresIn: '1h' }
@@ -373,7 +376,7 @@ exports.verifyUpdateProfile = async (req, res) => {
         role: updatedUser.role,
         is_admin: updatedUser.is_admin,
         is_super_admin: updatedUser.is_super_admin,
-        is_adviser: updatedUser.is_adviser // ✅ ADDED
+        is_adviser: updatedUser.is_adviser
       }
     });
 
@@ -459,6 +462,7 @@ exports.changePassword = async (req, res) => {
 
     const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
 
+    // ✅ MODIFIED: Updates Password AND Clears the Flag (using userModel logic we added)
     await userModel.updatePassword(userId, newPasswordHash);
 
     await db.query(
@@ -473,6 +477,53 @@ exports.changePassword = async (req, res) => {
     res.status(500).json({ message: 'Server error changing password.' });
   }
 };
+
+// ===============================================
+// ✅ NEW ENDPOINT: DIRECT PASSWORD CHANGE (No OTP)
+// ===============================================
+// This is used by the "First Login Modal" where the user is already authenticated
+// and forced to change their password.
+exports.changePasswordDirect = async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.userId;
+  
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Both current and new passwords are required." });
+    }
+
+    // Validate new password strength
+    if (!passwordRegex.test(newPassword)) {
+        return res.status(400).json({
+          message: 'New password is too weak.',
+          details: 'Must be 8+ chars with uppercase, lowercase, number, and special char.'
+        });
+    }
+  
+    try {
+      // 1. Get the user (We need the password hash to verify current password)
+      // Note: We use db.query directly or userModel.findById if it returns password_hash (it usually doesn't for security)
+      // So let's query directly to be safe.
+      const result = await db.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+      const user = result.rows[0];
+      
+      if (!user) return res.status(404).json({ message: 'User not found' });
+  
+      // 2. Verify current (temp) password
+      const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+      if (!isMatch) return res.status(401).json({ message: 'Incorrect current password.' });
+  
+      // 3. Hash new password
+      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+  
+      // 4. Update and CLEAR the 'force_password_change' flag
+      await userModel.updatePassword(userId, newPasswordHash);
+  
+      res.json({ message: 'Password updated successfully.' });
+    } catch (err) {
+      console.error("Direct Password Change Error:", err);
+      res.status(500).json({ message: 'Server error updating password.' });
+    }
+  };
 
 
 exports.forgotPassword = async (req, res) => {
@@ -514,6 +565,8 @@ exports.resetPassword = async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, saltRounds);
+    
+    // ✅ MODIFIED: Use model logic that clears the force flag too
     await userModel.updatePassword(user.id, passwordHash);
 
     res.json({ message: 'Password updated successfully. You can now login.' });
