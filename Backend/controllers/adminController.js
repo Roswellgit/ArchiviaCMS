@@ -351,28 +351,45 @@ exports.approveDocument = async (req, res) => {
   }
 };
 
+// ✅ ROBUST REJECTION FUNCTION
 exports.rejectDocument = async (req, res) => {
   try {
     const { id } = req.params;
-    const { reason } = req.body; 
+    
+    // 🛡️ SAFETY CHECK 1: Handle missing body to prevent crash
+    const { reason } = req.body || {}; 
 
+    // 1. Update status in DB
     const doc = await documentModel.updateStatus(id, 'rejected');
     if (!doc) return res.status(404).json({ message: "Document not found" });
 
-    // ✅ NOTIFICATION: Notify User of Rejection
-    const owner = await userModel.getDocumentOwnerEmail(id);
-    if (owner) {
-        emailService.sendDocumentStatusUpdate(owner.email, owner.first_name, owner.title, 'rejected', reason)
-            .catch(err => console.error("Email Error (Rejection):", err.message));
+    // 2. Email Notification (Wrapped in its own try/catch so it doesn't crash the response)
+    try {
+        const owner = await userModel.getDocumentOwnerEmail(id);
+        
+        if (owner && owner.email) {
+            await emailService.sendDocumentStatusUpdate(
+                owner.email, 
+                owner.first_name, 
+                owner.title, 
+                'rejected', 
+                reason || 'No specific reason provided.'
+            );
+        } else {
+            console.warn(`[Notification Warning] No owner found for doc ${id}, skipping email.`);
+        }
+    } catch (emailErr) {
+        // Log error but DO NOT fail the request. The document is already rejected.
+        console.error("Email/DB Notification Failed (Non-fatal):", emailErr.message);
     }
 
-    res.json({ message: 'Document rejected', doc });
+    res.json({ message: 'Document rejected successfully', doc });
+
   } catch (error) {
-    console.error(error);
+    console.error("Reject Document Fatal Error:", error); 
     res.status(500).json({ error: 'Failed to reject document' });
   }
 };
-
 exports.adminUpdateDocument = async (req, res) => {
   try {
     const { id } = req.params;
