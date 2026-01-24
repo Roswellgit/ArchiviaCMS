@@ -31,7 +31,10 @@ export default function AdminArchiveRequestsPage() {
   const [userRequests, setUserRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Modal State
+  // --- BULK STATE ---
+  const [selectedRequestIds, setSelectedRequestIds] = useState([]);
+
+  // Modal State (id: null means bulk action)
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, type: '', id: null });
 
   const { user, authLoading } = useAuth();
@@ -44,62 +47,143 @@ export default function AdminArchiveRequestsPage() {
   const fetchData = async () => {
     try {
       const res = await getUserArchiveRequests();
-      setUserRequests(res.data);
+      setUserRequests(res.data || res);
+      setSelectedRequestIds([]); // Reset selection on fetch
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
   useEffect(() => { if(user?.is_super_admin) fetchData(); }, [user]);
 
+  // --- BULK SELECTION HANDLERS ---
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedRequestIds(userRequests.map(r => r.id));
+    } else {
+      setSelectedRequestIds([]);
+    }
+  };
+
+  const handleSelectOne = (e, id) => {
+    if (e.target.checked) {
+      setSelectedRequestIds(prev => [...prev, id]);
+    } else {
+      setSelectedRequestIds(prev => prev.filter(item => item !== id));
+    }
+  };
+
   // --- HANDLERS ---
 
-  const initiateAction = (type, id) => {
+  const initiateAction = (type, id = null) => {
     setConfirmConfig({ isOpen: true, type, id });
   };
 
   const executeAction = async () => {
     const { type, id } = confirmConfig;
-    if (!id) return;
     
     // Close modal immediately
     setConfirmConfig({ ...confirmConfig, isOpen: false });
 
     try {
+        // Determine if we are processing a single ID or the bulk selection
+        const idsToProcess = id ? [id] : selectedRequestIds;
+
         if (type === 'approve') {
-            await adminApproveUserArchive(id);
-            toast.success("User deactivated successfully.");
+            // "Approve" means Deactivate User in this context
+            await Promise.all(idsToProcess.map(reqId => adminApproveUserArchive(reqId)));
+            toast.success(`${idsToProcess.length > 1 ? 'Users' : 'User'} deactivated successfully.`);
         } else if (type === 'reject') {
-            await adminRejectUserArchive(id);
-            toast.success("Archive request rejected.");
+            await Promise.all(idsToProcess.map(reqId => adminRejectUserArchive(reqId)));
+            toast.success(`${idsToProcess.length > 1 ? 'Requests' : 'Request'} rejected.`);
         }
-        // Remove from list
-        setUserRequests(prev => prev.filter(r => r.id !== id));
+        
+        // Refresh Data
+        fetchData();
     } catch (err) { 
         toast.error("Action failed."); 
+        console.error(err);
     }
   };
 
   if (!user?.is_super_admin) return null;
 
-  const RequestCard = ({ title, sub, reason, onReject, onRequestApprove, colorClass, btnText }) => (
-    <div className={`bg-white p-6 rounded-xl shadow-md border-l-4 ${colorClass} border-y border-r border-slate-100 flex flex-col md:flex-row justify-between items-start gap-4`}>
-        <div className="flex-grow">
-            <h3 className="font-bold text-lg text-slate-800">{title}</h3>
-            <p className="text-xs text-slate-400 font-mono mb-3">{sub}</p>
-            <p className="text-sm text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 italic">&quot;{reason}&quot;</p>
+  // --- REQUEST CARD COMPONENT ---
+  const RequestCard = ({ req, onReject, onRequestApprove }) => (
+    <div className={`bg-white p-6 rounded-xl shadow-md border-l-4 border-l-orange-500 border-y border-r border-slate-100 flex flex-col md:flex-row justify-between items-start gap-4 transition-all ${selectedRequestIds.includes(req.id) ? 'ring-2 ring-orange-400 bg-orange-50/10' : ''}`}>
+        
+        <div className="flex items-start gap-4 flex-grow">
+            {/* CHECKBOX */}
+            <input 
+                type="checkbox" 
+                className="mt-1.5 w-5 h-5 rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                checked={selectedRequestIds.includes(req.id)}
+                onChange={(e) => handleSelectOne(e, req.id)}
+            />
+
+            <div>
+                <h3 className="font-bold text-lg text-slate-800">
+                    {req.first_name} {req.last_name}
+                </h3>
+                <p className="text-xs text-slate-400 font-mono mb-3">{req.email}</p>
+                <p className="text-sm text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 italic">
+                    &quot;{req.archive_reason}&quot;
+                </p>
+            </div>
         </div>
-        <div className="flex gap-3 shrink-0">
-            <button onClick={onReject} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition">Reject</button>
-            <button onClick={onRequestApprove} className="px-4 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 shadow transition">{btnText}</button>
+
+        <div className="flex gap-3 shrink-0 ml-9 md:ml-0 w-full md:w-auto">
+            <button onClick={onReject} className="flex-1 md:flex-none px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition text-sm">Reject</button>
+            <button onClick={onRequestApprove} className="flex-1 md:flex-none px-4 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 shadow transition text-sm">Deactivate User</button>
         </div>
     </div>
   );
 
   return (
     <div className="space-y-8 pb-24">
-      <div className="border-b border-slate-200 pb-4">
-        <h1 className="text-2xl font-extrabold text-slate-900">User Archive Requests</h1>
-        <p className="text-slate-500 text-sm mt-1">Review requests to deactivate or archive user accounts</p>
+      <div className="border-b border-slate-200 pb-4 flex flex-col md:flex-row justify-between items-end gap-4">
+        <div>
+            <h1 className="text-2xl font-extrabold text-slate-900">User Archive Requests</h1>
+            <p className="text-slate-500 text-sm mt-1">Review requests to deactivate or archive user accounts</p>
+        </div>
+        
+        {/* SELECT ALL TOGGLE */}
+        {userRequests.length > 0 && (
+            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg">
+                <input 
+                    type="checkbox" 
+                    id="selectAllRequests"
+                    className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                    onChange={handleSelectAll}
+                    checked={userRequests.length > 0 && selectedRequestIds.length === userRequests.length}
+                />
+                <label htmlFor="selectAllRequests" className="text-sm font-bold text-slate-600 cursor-pointer select-none">
+                    Select All
+                </label>
+            </div>
+        )}
       </div>
+
+      {/* BULK ACTION BAR */}
+      {selectedRequestIds.length > 0 && (
+          <div className="sticky top-4 z-40 bg-orange-600 text-white p-4 rounded-xl shadow-lg flex justify-between items-center animate-fade-in">
+              <span className="font-bold text-sm px-2">
+                  {selectedRequestIds.length} requests selected
+              </span>
+              <div className="flex gap-3">
+                  <button 
+                      onClick={() => initiateAction('reject', null)} 
+                      className="bg-white/20 hover:bg-white/30 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition"
+                  >
+                      Reject Selected
+                  </button>
+                  <button 
+                      onClick={() => initiateAction('approve', null)} 
+                      className="bg-white text-orange-700 px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-orange-50 transition shadow-sm"
+                  >
+                      Deactivate Selected
+                  </button>
+              </div>
+          </div>
+      )}
 
       {loading ? <p className="text-center text-slate-400">Loading requests...</p> : userRequests.length === 0 ? (
           <div className="p-10 bg-white rounded-xl border border-slate-100 text-center text-slate-500 italic">No pending user requests.</div>
@@ -108,11 +192,7 @@ export default function AdminArchiveRequestsPage() {
           {userRequests.map(req => (
               <RequestCard 
                   key={req.id} 
-                  title={`${req.first_name} ${req.last_name}`} 
-                  sub={req.email} 
-                  reason={req.archive_reason}
-                  colorClass="border-l-orange-500" 
-                  btnText="Deactivate User"
+                  req={req}
                   onReject={() => initiateAction('reject', req.id)}
                   onRequestApprove={() => initiateAction('approve', req.id)}
               />
@@ -125,10 +205,16 @@ export default function AdminArchiveRequestsPage() {
         isOpen={confirmConfig.isOpen}
         onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
         onConfirm={executeAction}
-        title={confirmConfig.type === 'approve' ? 'Deactivate User?' : 'Reject Request?'}
-        message={confirmConfig.type === 'approve' 
-            ? "Are you sure you want to deactivate this user? They will lose access immediately."
-            : "Are you sure you want to reject this request? The user will remain active."}
+        title={
+            confirmConfig.type === 'approve' 
+            ? (confirmConfig.id ? 'Deactivate User?' : `Deactivate ${selectedRequestIds.length} Users?`)
+            : (confirmConfig.id ? 'Reject Request?' : `Reject ${selectedRequestIds.length} Requests?`)
+        }
+        message={
+            confirmConfig.type === 'approve' 
+            ? "Are you sure you want to deactivate these users? They will lose access immediately."
+            : "Are you sure you want to reject these requests? The users will remain active."
+        }
         confirmText={confirmConfig.type === 'approve' ? 'Deactivate' : 'Reject'}
         isDanger={confirmConfig.type === 'approve'} // Deactivation is the "dangerous" action here
       />

@@ -32,22 +32,31 @@ export default function AdminDocumentManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // --- BULK SELECTION STATE ---
+  const [selectedDocIds, setSelectedDocIds] = useState([]);
+
   // --- MODAL STATES ---
   
   // 1. Archive Modal
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
-  const [docToArchive, setDocToArchive] = useState(null);
+  const [docToArchive, setDocToArchive] = useState(null); // Null indicates Bulk Mode
   const [archiveReason, setArchiveReason] = useState('');
 
   // 2. Delete Modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [docToDelete, setDocToDelete] = useState(null);
 
-  // 3. Restore Modal (NEW)
+  // 3. Restore Modal
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [docToRestore, setDocToRestore] = useState(null);
   
   const { user } = useAuth(); 
+  const isSuperAdmin = user?.is_super_admin;
+
+  // Clear selection when tab changes
+  useEffect(() => {
+    setSelectedDocIds([]);
+  }, [currentTab, currentPage]);
 
   // Lock scroll when ANY modal is open
   useEffect(() => {
@@ -66,6 +75,7 @@ export default function AdminDocumentManagement() {
   const refreshData = () => {
     handleSearch(searchTerm);
     fetchPendingQueue();
+    setSelectedDocIds([]); // Clear selection on refresh
   };
 
   const handleSearch = async (term) => {
@@ -93,6 +103,24 @@ export default function AdminDocumentManagement() {
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     handleSearch(searchTerm);
+  };
+
+  // --- BULK SELECTION HANDLERS ---
+  const handleSelectAll = (e, currentItems) => {
+    if (e.target.checked) {
+      const ids = currentItems.map(doc => doc.id);
+      setSelectedDocIds(ids);
+    } else {
+      setSelectedDocIds([]);
+    }
+  };
+
+  const handleSelectOne = (e, id) => {
+    if (e.target.checked) {
+      setSelectedDocIds(prev => [...prev, id]);
+    } else {
+      setSelectedDocIds(prev => prev.filter(item => item !== id));
+    }
   };
 
   const formatAuthors = (authors) => {
@@ -148,23 +176,34 @@ export default function AdminDocumentManagement() {
     }
   };
 
-  // --- ARCHIVE HANDLERS ---
-  const openArchiveModal = (doc) => {
-    setDocToArchive(doc);
+  // --- ARCHIVE HANDLERS (UPDATED) ---
+  const openArchiveModal = (doc = null) => {
+    setDocToArchive(doc); // If null, treat as bulk archive
     setArchiveReason('');
     setIsArchiveModalOpen(true);
   };
 
   const executeArchive = async (e) => {
     e.preventDefault();
-    if(!docToArchive) return;
     if(!archiveReason.trim()) return toast.error("Please provide a reason.");
 
     try {
-        await adminArchiveDocument(docToArchive.id, { reason: archiveReason });
-        toast.success("Document archived.");
+        if (docToArchive) {
+            // Single Archive
+            await adminArchiveDocument(docToArchive.id, { reason: archiveReason });
+            toast.success("Document archived.");
+        } else {
+            // Bulk Archive
+            const promises = selectedDocIds.map(id => 
+                adminArchiveDocument(id, { reason: archiveReason })
+            );
+            await Promise.all(promises);
+            toast.success(`${selectedDocIds.length} documents archived.`);
+        }
+
         setIsArchiveModalOpen(false);
         setDocToArchive(null);
+        setSelectedDocIds([]); // Clear selection
         refreshData();
     } catch (err) { 
         toast.error("Failed to archive."); 
@@ -172,7 +211,7 @@ export default function AdminDocumentManagement() {
     }
   };
 
-  // --- RESTORE HANDLERS (NEW) ---
+  // --- RESTORE HANDLERS ---
   const openRestoreModal = (doc) => {
     setDocToRestore(doc);
     setIsRestoreModalOpen(true);
@@ -265,6 +304,22 @@ export default function AdminDocumentManagement() {
           </div>
       </div>
       
+      {/* BULK ARCHIVE BAR (Visible to Super Admin when items selected in Library) */}
+      {isSuperAdmin && currentTab === 'active' && selectedDocIds.length > 0 && (
+          <div className="bg-orange-50 border border-orange-200 p-3 rounded-xl flex justify-between items-center animate-fade-in">
+              <div className="flex items-center gap-2 text-orange-800 text-sm font-bold px-2">
+                  <span className="bg-orange-200 text-orange-800 px-2 py-0.5 rounded text-xs">{selectedDocIds.length}</span>
+                  <span>documents selected</span>
+              </div>
+              <button 
+                  onClick={() => openArchiveModal(null)} 
+                  className="bg-orange-600 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-orange-700 shadow-sm transition"
+              >
+                  Bulk Archive Selected
+              </button>
+          </div>
+      )}
+
       {/* Search Bar */}
       {currentTab !== 'pending' && (
         <form onSubmit={handleSearchSubmit} className="relative">
@@ -290,31 +345,59 @@ export default function AdminDocumentManagement() {
           </div>
       ) : (
         <>
+            {/* SELECT ALL CHECKBOX (Only for Super Admin in Library) */}
+            {isSuperAdmin && currentTab === 'active' && (
+                <div className="flex items-center gap-2 px-2 mb-2">
+                    <input 
+                        type="checkbox" 
+                        id="selectAll"
+                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        onChange={(e) => handleSelectAll(e, currentItems)}
+                        checked={currentItems.length > 0 && currentItems.every(doc => selectedDocIds.includes(doc.id))}
+                    />
+                    <label htmlFor="selectAll" className="text-xs text-slate-500 font-bold uppercase cursor-pointer select-none">Select All on Page</label>
+                </div>
+            )}
+
             <div className="grid gap-4">
             {currentItems.map(doc => (
-                <div key={doc.id} className="p-5 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div key={doc.id} className={`p-5 bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${selectedDocIds.includes(doc.id) ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50/10' : 'border-slate-100'}`}>
                     
-                    <div className="flex-1 min-w-0 space-y-2">
-                        <div className="flex flex-wrap items-center gap-3">
-                            <h3 className="text-lg font-bold text-slate-800 break-words leading-tight">
-                                {doc.title || "Untitled"}
-                            </h3>
-                            
-                            {doc.deletion_requested && <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase shrink-0">Deletion Requested</span>}
-                            {currentTab === 'pending' && <span className="bg-yellow-100 text-yellow-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase shrink-0">Pending</span>}
-                        </div>
-                        
-                        {currentTab === 'archived' && doc.archive_reason && (
-                            <p className="text-xs text-orange-600 font-medium break-words bg-orange-50 p-1 rounded border border-orange-100 inline-block">Reason: {doc.archive_reason}</p>
+                    <div className="flex items-start gap-4 flex-1 min-w-0">
+                        {/* ITEM CHECKBOX */}
+                        {isSuperAdmin && currentTab === 'active' && (
+                            <div className="pt-1">
+                                <input 
+                                    type="checkbox" 
+                                    className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                    checked={selectedDocIds.includes(doc.id)}
+                                    onChange={(e) => handleSelectOne(e, doc.id)}
+                                />
+                            </div>
                         )}
-                        
-                        <p className="text-sm text-slate-500 break-words">
-                            {formatAuthors(doc.ai_authors)} • {doc.ai_date_created || 'No Date'}
-                        </p>
-                        
-                        <a href={doc.downloadLink || doc.file_url || '#'} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline inline-block font-medium">
-                           View PDF
-                        </a>
+
+                        <div className="space-y-2 w-full">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <h3 className="text-lg font-bold text-slate-800 break-words leading-tight">
+                                    {doc.title || "Untitled"}
+                                </h3>
+                                
+                                {doc.deletion_requested && <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase shrink-0">Deletion Requested</span>}
+                                {currentTab === 'pending' && <span className="bg-yellow-100 text-yellow-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase shrink-0">Pending</span>}
+                            </div>
+                            
+                            {currentTab === 'archived' && doc.archive_reason && (
+                                <p className="text-xs text-orange-600 font-medium break-words bg-orange-50 p-1 rounded border border-orange-100 inline-block">Reason: {doc.archive_reason}</p>
+                            )}
+                            
+                            <p className="text-sm text-slate-500 break-words">
+                                {formatAuthors(doc.ai_authors)} • {doc.ai_date_created || 'No Date'}
+                            </p>
+                            
+                            <a href={doc.downloadLink || doc.file_url || '#'} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline inline-block font-medium">
+                               View PDF
+                            </a>
+                        </div>
                     </div>
                     
                     {/* Action Buttons */}
@@ -337,19 +420,18 @@ export default function AdminDocumentManagement() {
                                     Archive
                                   </button>
                              ) : (
-                                   // 👇 FIXED: Opens Modal instead of acting immediately
-                                   <button onClick={() => openRestoreModal(doc)} className="text-sm font-semibold text-green-600 hover:text-green-800">
-                                     Restore
-                                   </button>
+                                  <button onClick={() => openRestoreModal(doc)} className="text-sm font-semibold text-green-600 hover:text-green-800">
+                                    Restore
+                                  </button>
                              )}
                              
                              {user?.is_super_admin && (
-                                 <>
-                                     <div className="hidden md:block h-4 w-px bg-slate-200"></div>
-                                     <button onClick={() => openDeleteModal(doc)} className="text-sm font-semibold text-red-600 hover:text-red-800">
-                                       Delete
-                                     </button>
-                                 </>
+                                  <>
+                                      <div className="hidden md:block h-4 w-px bg-slate-200"></div>
+                                      <button onClick={() => openDeleteModal(doc)} className="text-sm font-semibold text-red-600 hover:text-red-800">
+                                        Delete
+                                      </button>
+                                  </>
                              )}
                            </>
                         )}
@@ -381,19 +463,25 @@ export default function AdminDocumentManagement() {
         </>
       )}
       
-      {/* 1. ARCHIVE REASON MODAL */}
-      {isArchiveModalOpen && docToArchive && (
+      {/* 1. ARCHIVE MODAL (Updated for Bulk) */}
+      {isArchiveModalOpen && (
         <Portal>
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-in relative">
               <div className="p-6 border-b border-gray-100 bg-orange-50 flex justify-between items-center">
-                 <h3 className="text-lg font-bold text-orange-800">Archive Document</h3>
+                 <h3 className="text-lg font-bold text-orange-800">
+                    {docToArchive ? 'Archive Document' : 'Bulk Archive'}
+                 </h3>
                  <button onClick={() => setIsArchiveModalOpen(false)} className="text-orange-400 hover:text-orange-600 font-bold">✕</button>
               </div>
               
               <form onSubmit={executeArchive} className="p-6 space-y-4">
                  <p className="text-slate-600 text-sm">
-                   You are archiving <strong>{docToArchive.title}</strong>. It will be hidden from search results.
+                   {docToArchive 
+                     ? <>You are archiving <strong>{docToArchive.title}</strong>.</>
+                     : <>You are archiving <strong>{selectedDocIds.length} documents</strong>.</>
+                   }
+                   <br/>They will be hidden from search results.
                  </p>
 
                  <div>
