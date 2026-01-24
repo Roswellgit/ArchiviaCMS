@@ -344,9 +344,9 @@ exports.getDocumentOwnerEmail = async (docId) => {
   const { rows } = await db.query(
     `SELECT u.email, u.first_name, d.title 
      FROM documents d 
-     JOIN users u ON d.uploaded_by = u.id 
+     JOIN users u ON d.user_id = u.id  -- 👈 CHANGED from d.uploaded_by to d.user_id
      WHERE d.id = $1`,
     [docId]
   );
-  return rows[0]; // Returns { email, first_name, title }
+  return rows[0]; 
 };
