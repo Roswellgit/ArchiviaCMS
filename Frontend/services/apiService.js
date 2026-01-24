@@ -2,10 +2,13 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
+
 const api = axios.create({
     baseURL: API_URL,
     withCredentials: true 
 });
+
+
 
 api.interceptors.request.use(
     (config) => {
@@ -20,6 +23,7 @@ api.interceptors.request.use(
     }
 );
 
+
 export const setAuthToken = (token) => {
     if (token) {
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -29,6 +33,10 @@ export const setAuthToken = (token) => {
         localStorage.removeItem('token');
     }
 };
+
+
+
+
 
 export const searchDocuments = (term) => {
     if (!term) return api.get('/documents');
@@ -42,6 +50,10 @@ export const getPopularSearches = (limit) => {
     return api.get('/documents/popular');
 };
 export const getSettings = () => api.get('/settings');
+
+
+
+
 
 export const login = (email, password) => {
     if (typeof email === 'object') return api.post('/auth/login', email);
@@ -64,16 +76,20 @@ export const logout = () => {
 };
 export const getProfile = () => api.get('/auth/profile');
 
+
 export const updateProfile = (data) => api.put('/auth/profile', data);
 export const updateUserProfile = updateProfile; 
 
 export const changePassword = (data) => api.put('/auth/change-password', data);
+export const changeUserPassword = (currentPassword, newPassword) => 
+    api.put('/auth/change-password', { currentPassword, newPassword });
 
 export const requestPasswordOTP = (currentPassword) => 
     api.post('/auth/request-password-otp', { currentPassword });
 
-export const changeUserPassword = (otp, newPassword) => 
-    api.put('/auth/change-password', { otp, newPassword });
+
+
+
 
 export const uploadDocument = (formData, onUploadProgress) => api.post('/documents/upload', formData, {
     onUploadProgress
@@ -84,6 +100,10 @@ export const deleteDocument = (id) => api.delete(`/documents/${id}`);
 export const getCitation = (document, style) => api.post('/documents/citation', { document, style });
 export const requestDelete = (id, reason) => api.post(`/documents/${id}/request-delete`, { reason });
 export const requestDeletion = requestDelete;
+
+
+
+
 
 export const adminDeleteUserPermanently = (id) => api.delete(`/admin/users/${id}?permanent=true`);
 export const getAdminAnalytics = () => api.get('/admin/analytics');
@@ -127,6 +147,7 @@ export const adminUpdateSettings = updateSettings;
 export const resetSettings = () => api.post('/admin/settings/reset');
 export const adminResetSettings = resetSettings;
 
+
 export const uploadIcon = (formData, onUploadProgress) => api.post('/admin/icon-upload', formData, {
     onUploadProgress
 });
@@ -148,26 +169,36 @@ export const adminRemoveBgImage = removeBgImage;
 export const removeBrandIcon = () => api.post('/admin/remove-brand-icon');
 export const adminRemoveBrandIcon = removeBrandIcon;
 
-// ✅ FIXED: Now matches backend route ('/admin/users') and uses 'api' instance
-export const adminCreateUser = (userData) => api.post('/admin/users', userData);
+export const adminCreateUser = async (userData) => {
+  const token = localStorage.getItem('token');
+  // Adjust the endpoint path if your backend route is different (e.g., /auth/register or /admin/create-account)
+  // Based on your adminController, it seems to be an admin specific route.
+  const response = await axios.post(`${API_URL}/admin/create-account`, userData, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return response.data;
+};
 
 export const fetchPendingDocs = async () => {
-    const response = await api.get('/admin/documents/pending');
-    return response.data;
+  // Uses the configured axios instance 'api'
+  const response = await api.get('/admin/documents/pending');
+  return response.data;
 };
 
 export const approveDocument = async (id) => {
-    const response = await api.put(`/admin/documents/${id}/approve`);
-    return response.data;
+  const response = await api.put(`/admin/documents/${id}/approve`);
+  return response.data;
 };
 
-export const rejectDocument = async (id) => {
-    const response = await api.put(`/admin/documents/${id}/reject`);
-    return response.data;
+export const rejectDocument = async (id, data) => {
+  const response = await api.put(`/admin/documents/${id}/reject`, data);
+  return response.data;
 };
 
 export const getFormOptions = () => api.get('/admin/options');
 export const addFormOption = (type, value) => api.post('/admin/options', { type, value });
 export const deleteFormOption = (type, value) => api.delete('/admin/options', { data: { type, value } });
+
+
 
 export default api;
