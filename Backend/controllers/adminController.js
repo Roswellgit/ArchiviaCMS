@@ -305,8 +305,26 @@ exports.rejectUserArchive = async (req, res) => {
 
 exports.getPendingDocuments = async (req, res) => {
   try {
+    // 1. Get raw documents from DB
     const docs = await documentModel.findPending();
-    res.json(docs);
+
+    // 2. ✅ FIX: Generate Presigned S3 URLs for each document
+    // This turns "documents/file.pdf" into a clickable "https://s3.amazonaws.com/..." link
+    const docsWithLinks = await Promise.all(docs.map(async (doc) => {
+        if (doc.filepath) {
+            try {
+                // Ensure s3Service is imported at the top of your file!
+                const url = await s3Service.getPresignedUrl(doc.filepath);
+                return { ...doc, downloadLink: url };
+            } catch (e) {
+                console.error(`Error signing URL for ${doc.filename}:`, e.message);
+                return doc; 
+            }
+        }
+        return doc;
+    }));
+
+    res.json(docsWithLinks);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch pending documents' });
