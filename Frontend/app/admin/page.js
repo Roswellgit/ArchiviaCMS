@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom'; // 👈 Import createPortal
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
@@ -16,50 +16,67 @@ import {
   getDeletionRequests, approveDeletion, rejectDeletion 
 } from '../../services/apiService';
 
-// --- HELPER: CONFIRMATION MODAL ---
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
+// --- UPDATED: CONFIRMATION MODAL WITH REASON INPUT ---
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger, showReasonInput }) => {
   const [mounted, setMounted] = useState(false);
+  const [reason, setReason] = useState(''); // State for rejection reason
 
-  // 1. Handle Mounting for Portal Safety
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
   }, []);
 
-  // 2. Prevent background scrolling when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      setReason(''); // Reset reason on open
     } else {
       document.body.style.overflow = 'unset';
     }
     return () => { document.body.style.overflow = 'unset'; };
   }, [isOpen]);
 
+  const handleConfirm = () => {
+    if (showReasonInput && !reason.trim()) {
+      return toast.error("Please provide a reason.");
+    }
+    onConfirm(reason); // Pass reason to parent
+  };
+
   if (!isOpen || !mounted) return null;
 
-  // 3. Use Portal to render outside the current DOM hierarchy
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-      {/* Modal Container */}
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in relative">
         <div className="p-6 text-center">
           <h3 className={`text-lg font-bold mb-2 ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{title}</h3>
-          <p className="text-slate-600 text-sm mb-6">{message}</p>
+          <p className="text-slate-600 text-sm mb-4">{message}</p>
+          
+          {/* Reason Input */}
+          {showReasonInput && (
+            <textarea
+              className="w-full p-2 border border-slate-300 rounded-lg text-sm mb-4 focus:ring-2 focus:ring-red-500 outline-none"
+              placeholder="Enter reason for rejection..."
+              rows="3"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          )}
+
           <div className="flex gap-3 justify-center">
             <button onClick={onClose} className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition">Cancel</button>
-            <button onClick={onConfirm} className={`px-4 py-2 text-white font-bold rounded-lg shadow-md transition ${isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-900 hover:bg-emerald-600'}`}>
+            <button onClick={handleConfirm} className={`px-4 py-2 text-white font-bold rounded-lg shadow-md transition ${isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-900 hover:bg-emerald-600'}`}>
               {confirmText || 'Confirm'}
             </button>
           </div>
         </div>
       </div>
     </div>,
-    document.body // 👈 Target container
+    document.body
   );
 };
 
-// --- HELPER COMPONENT: REQUEST TABLE (Unchanged) ---
+// --- UPDATED: REQUEST TABLE WITH VIEW BUTTON ---
 const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon }) => (
   <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col w-full h-full">
     {/* Header */}
@@ -84,13 +101,30 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
           ) : (
             items.map(item => {
               const reasonText = item.reason || item.archive_reason || item.deletion_reason || item.request_reason;
+              // Check if item has a viewable link (downloadLink or filepath)
+              const viewLink = item.downloadLink || item.filepath; 
 
               return (
                 <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="p-4 align-top">
-                      <p className="font-bold text-slate-700 block mb-1">
-                        {item.title || `${item.first_name} ${item.last_name}`}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-slate-700 block mb-1">
+                          {item.title || `${item.first_name} ${item.last_name}`}
+                        </p>
+                        {/* VIEW BUTTON */}
+                        {viewLink && (
+                           <a 
+                             href={viewLink} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded hover:bg-blue-100 hover:text-blue-600 transition-colors"
+                             title="View Document"
+                           >
+                             👁️ View
+                           </a>
+                        )}
+                      </div>
+
                       {item.author_name && <p className="text-xs text-slate-400">By: {item.author_name}</p>}
                       
                       {reasonText && (
@@ -180,13 +214,16 @@ export default function AdminDashboardPage() {
       setConfirmConfig({ isOpen: true, type, id, action });
   };
 
-  const executeAction = async () => {
+  const executeAction = async (reasonInput) => {
       const { type, id, action } = confirmConfig;
       if (!type || !id) return;
 
+      // Payload might include reason now
+      const payload = reasonInput ? { reason: reasonInput } : {};
+
       try {
           if (type === 'upload') {
-              action === 'approve' ? await approveDocument(id) : await rejectDocument(id);
+              action === 'approve' ? await approveDocument(id) : await rejectDocument(id, payload);
           } else if (type === 'docArchive') {
               action === 'approve' ? await approveDocArchive(id) : await rejectDocArchive(id);
           } else if (type === 'userArchive') {
@@ -334,6 +371,7 @@ export default function AdminDashboardPage() {
         message={`Are you sure you want to ${confirmConfig.action} this request?`}
         confirmText={confirmConfig.action === 'approve' ? 'Approve' : 'Reject'}
         isDanger={confirmConfig.action === 'reject'}
+        showReasonInput={confirmConfig.action === 'reject'} // Show input only on reject
       />
     </>
   );
