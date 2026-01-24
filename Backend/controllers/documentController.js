@@ -7,6 +7,10 @@ const previewService = require('../services/previewService');
 const watermarkService = require('../services/watermarkService'); 
 const path = require('path');
 
+// ✅ NEW IMPORTS for notifications
+const userModel = require('../models/userModel');
+const emailService = require('../services/emailService');
+
 const upload = fileUploadService.upload;
 
 let trendsCache = { data: [], lastUpdated: 0 };
@@ -50,7 +54,6 @@ exports.getAllDocuments = async (req, res) => {
 };
 
 exports.searchDocuments = async (req, res) => {
-
   const { term, q } = req.query; 
   const searchTerm = term || q; 
 
@@ -163,23 +166,19 @@ exports.uploadDocument = (req, res) => {
         return res.status(400).json({ message: 'The uploaded file is empty.' });
     }
 
-    // --- 2. START WATERMARK LOGIC ---
-    // Apply watermark ONLY if it is a PDF
+    // --- WATERMARK LOGIC ---
     if (req.file.mimetype === 'application/pdf') {
         try {
             const watermarkedBuffer = await watermarkService.addWatermarkToPdf(
                 req.file.buffer, 
                 'Archivia' 
             );
-            
             req.file.buffer = watermarkedBuffer;
             req.file.size = watermarkedBuffer.length; 
-            
         } catch (wmErr) {
             console.error("Watermarking failed, proceeding with original file:", wmErr);
         }
     }
-    // --- END WATERMARK LOGIC ---
 
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const filename = `doc-${uniqueSuffix}${path.extname(req.file.originalname)}`;
@@ -203,12 +202,7 @@ exports.uploadDocument = (req, res) => {
         ]);
 
         if (metadata.is_safe === false) {
-            console.warn(`[Content Moderation] Upload rejected: ${metadata.safety_reason}`);
-            
-            if (s3Service.deleteFromS3) {
-                await s3Service.deleteFromS3(fileKey);
-            }
-            
+            if (s3Service.deleteFromS3) await s3Service.deleteFromS3(fileKey);
             return res.status(422).json({ 
                 message: `Upload rejected. Content flagged as inappropriate: ${metadata.safety_reason || 'Policy violation detected.'}` 
             });
@@ -217,9 +211,7 @@ exports.uploadDocument = (req, res) => {
         if (metadata.title) {
             const existingDoc = await documentModel.findByExactTitle(metadata.title);
             if (existingDoc) {
-                if (s3Service.deleteFromS3) {
-                    await s3Service.deleteFromS3(fileKey);
-                }
+                if (s3Service.deleteFromS3) await s3Service.deleteFromS3(fileKey);
                 return res.status(409).json({ 
                     message: `Duplicate detected. A document with the title "${metadata.title}" already exists.` 
                 });
@@ -240,6 +232,22 @@ exports.uploadDocument = (req, res) => {
         };
 
         const newDocument = await documentModel.create(documentData);
+
+        // ✅ NOTIFICATION 1: Notify User (FIXED: Use first_name from DB/Middleware)
+        emailService.sendUploadConfirmation(
+            req.user.email, 
+            req.user.first_name, // Fixed: was firstName
+            metadata.title
+        ).catch(err => console.error("Email Error (User Upload):", err.message));
+
+        // ✅ NOTIFICATION 2: Notify Admins (FIXED: Use first_name/last_name)
+        const adminEmails = await userModel.getAdminEmails();
+        emailService.sendNewDocumentAlert(
+            adminEmails, 
+            `${req.user.first_name} ${req.user.last_name}`, // Fixed: was firstName/lastName
+            metadata.title
+        ).catch(err => console.error("Email Error (Admin Alert):", err.message));
+
         res.status(201).json(newDocument);
 
     } catch (error) {
@@ -312,6 +320,18 @@ exports.requestDeleteDocument = async (req, res) => {
       return res.status(404).json({ message: "Document not found or unauthorized." });
     }
 
+    // ✅ NOTIFICATION: Notify Super Admins
+    const superAdminEmails = await userModel.getSuperAdminEmails();
+    const doc = await documentModel.adminFindFileById(id); 
+    
+    emailService.sendSuperAdminRequestAlert(
+        superAdminEmails, 
+        'Deletion', 
+        doc ? doc.title : 'Unknown Document', 
+        `${req.user.first_name} ${req.user.last_name}`, // Fixed: variable names
+        reason
+    ).catch(err => console.error("Email Error (Deletion Request):", err.message));
+
     res.json({ message: "Deletion request submitted successfully.", request: result });
   } catch (err) {
     console.error("Error requesting deletion:", err.message);
@@ -331,6 +351,7 @@ exports.generateCitation = async (req, res) => {
   }
 };
 
+// ✅ UPDATED: Added Notification Logic for Approval
 exports.approveDocument = async (req, res) => {
   try {
     const { id } = req.params;
@@ -339,9 +360,43 @@ exports.approveDocument = async (req, res) => {
     if (!updatedDoc) {
       return res.status(404).json({ message: "Document not found." });
     }
+
+    // 📧 Notify Owner
+    const owner = await userModel.getDocumentOwnerEmail(id);
+    if (owner) {
+        emailService.sendDocumentStatusUpdate(owner.email, owner.first_name, owner.title, 'approved')
+            .catch(err => console.error("Email Error (Approval):", err.message));
+    }
+
     res.json({ message: "Document approved successfully.", document: updatedDoc });
   } catch (err) {
     console.error("Error approving document:", err.message);
+    res.status(500).send('Server error');
+  }
+};
+
+// ✅ NEW: Added Rejection Logic with Notification
+exports.rejectDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body; // Capture reason
+
+    const updatedDoc = await documentModel.updateStatus(id, 'rejected');
+
+    if (!updatedDoc) {
+      return res.status(404).json({ message: "Document not found." });
+    }
+
+    // 📧 Notify Owner
+    const owner = await userModel.getDocumentOwnerEmail(id);
+    if (owner) {
+        emailService.sendDocumentStatusUpdate(owner.email, owner.first_name, owner.title, 'rejected', reason)
+            .catch(err => console.error("Email Error (Rejection):", err.message));
+    }
+
+    res.json({ message: "Document rejected.", document: updatedDoc });
+  } catch (err) {
+    console.error("Error rejecting document:", err.message);
     res.status(500).send('Server error');
   }
 };

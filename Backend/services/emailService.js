@@ -91,13 +91,10 @@ exports.sendUpdateOtp = async (email, otp) => {
   }
 };
 
-// --- UPDATED WELCOME EMAIL ---
 exports.sendWelcomeEmail = async (to, firstName, password) => {
-  // Uses your environment variable or defaults to localhost
   const loginUrl = process.env.FRONTEND_URL || 'http://localhost:3000/login';
   
   const mailOptions = {
-    // FIX: Used your actual Gmail address to prevent blocking
     from: '"Archivia Admin" <archiviacap@gmail.com>', 
     to: to,
     subject: 'Welcome to Archivia - Account Created',
@@ -132,5 +129,127 @@ exports.sendWelcomeEmail = async (to, firstName, password) => {
     console.log(`[Email Service] Welcome email sent to ${to}`);
   } catch (error) {
     console.error('[Email Service] Error sending welcome email:', error);
+  }
+};
+
+// ==========================================
+// ✅ NEW NOTIFICATION TEMPLATES
+// ==========================================
+
+// 1. Notify User: Document Approved/Rejected
+exports.sendDocumentStatusUpdate = async (email, firstName, docTitle, status, reason = '') => {
+  const subject = `Document Update: ${status.toUpperCase()} - ${docTitle}`;
+  const color = status === 'approved' ? '#10B981' : '#EF4444'; // Green or Red
+  const statusText = status.charAt(0).toUpperCase() + status.slice(1);
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 600px; margin: auto;">
+      <h2 style="color: #333;">Document Status Update</h2>
+      <p>Hello <strong>${firstName}</strong>,</p>
+      <p>Your document <strong>"${docTitle}"</strong> has been <b style="color:${color}; font-size: 1.1em;">${statusText}</b>.</p>
+      
+      ${reason ? `<div style="background-color: #fef2f2; border-left: 4px solid #EF4444; padding: 10px; margin: 15px 0;"><strong>Reason/Feedback:</strong><br/>${reason}</div>` : ''}
+      
+      <p>You can log in to Archivia to view the document details.</p>
+      <hr style="border:0; border-top:1px solid #eee; margin-top:20px;">
+      <p style="font-size: 12px; color: #888;">Archivia Notification System</p>
+    </div>
+  `;
+  
+  try {
+    await transporter.sendMail({ from: 'archiviacap@gmail.com', to: email, subject, html });
+    console.log(`[Email] Status update sent to ${email}`);
+  } catch (err) {
+    console.error(`[Email Error] Failed to send status update: ${err.message}`);
+  }
+};
+
+// 2. Notify User: Upload Received (Pending)
+exports.sendUploadConfirmation = async (email, firstName, docTitle) => {
+  const subject = `Upload Confirmation: ${docTitle}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 600px; margin: auto;">
+      <h2 style="color: #4F46E5;">Upload Received</h2>
+      <p>Hello <strong>${firstName}</strong>,</p>
+      <p>We have successfully received your document: <strong>"${docTitle}"</strong>.</p>
+      <p>It is currently <strong style="color: #F59E0B;">PENDING APPROVAL</strong>.</p>
+      <p>Our administrators will review it shortly. You will be notified via email once a decision is made.</p>
+    </div>
+  `;
+  try {
+    await transporter.sendMail({ from: 'archiviacap@gmail.com', to: email, subject, html });
+  } catch (err) {
+    console.error(`[Email Error] Failed to send upload confirmation: ${err.message}`);
+  }
+};
+
+// 3. Notify Admins: New Document Alert
+exports.sendNewDocumentAlert = async (adminEmails, uploaderName, docTitle) => {
+  if (!adminEmails || adminEmails.length === 0) return;
+  
+  const subject = `Action Required: New Submission by ${uploaderName}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 600px; margin: auto;">
+      <h2 style="color: #333;">New Document Pending Approval</h2>
+      <p>A new document requires your review.</p>
+      <ul style="background-color: #f9fafb; padding: 15px; border-radius: 5px;">
+        <li><strong>Uploader:</strong> ${uploaderName}</li>
+        <li><strong>Document Title:</strong> ${docTitle}</li>
+        <li><strong>Status:</strong> Pending</li>
+      </ul>
+      <p>Please log in to the Admin Dashboard to approve or reject this document.</p>
+    </div>
+  `;
+  
+  try {
+    await transporter.sendMail({ from: 'archiviacap@gmail.com', to: adminEmails, subject, html });
+    console.log(`[Email] Admin alert sent to ${adminEmails.length} recipients.`);
+  } catch (err) {
+    console.error(`[Email Error] Failed to send admin alert: ${err.message}`);
+  }
+};
+
+// 4. Notify Super Admin: Deletion/Archive Request Pending
+exports.sendSuperAdminRequestAlert = async (superAdminEmails, requestType, docTitle, requesterName, reason) => {
+  if (!superAdminEmails || superAdminEmails.length === 0) return;
+
+  const subject = `Approval Needed: ${requestType} Request`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 600px; margin: auto;">
+      <h2 style="color: #DC2626;">${requestType} Approval Required</h2>
+      <p>An Admin has requested to <strong>${requestType.toLowerCase()}</strong> a document.</p>
+      <div style="background-color: #fff1f2; border: 1px solid #fecaca; padding: 15px; border-radius: 5px;">
+        <p><strong>Requester:</strong> ${requesterName}</p>
+        <p><strong>Document:</strong> ${docTitle}</p>
+        <p><strong>Reason:</strong> ${reason}</p>
+      </div>
+      <p style="margin-top: 15px;">Please log in as Super Admin to approve or reject this request.</p>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({ from: 'archiviacap@gmail.com', to: superAdminEmails, subject, html });
+    console.log(`[Email] Super Admin alert sent.`);
+  } catch (err) {
+    console.error(`[Email Error] Failed to send super admin alert: ${err.message}`);
+  }
+};
+
+// 5. Notify Admin/Owner: Request Outcome (Archived/Deleted)
+exports.sendRequestOutcome = async (email, requestType, docTitle, outcome) => {
+  const subject = `Request Update: ${requestType} for "${docTitle}"`;
+  const color = outcome.toLowerCase().includes('approved') ? 'green' : 'red';
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 600px; margin: auto;">
+      <h2>Request ${outcome}</h2>
+      <p>The request to <strong>${requestType}</strong> the document <strong>"${docTitle}"</strong> has been <strong style="color:${color}">${outcome}</strong>.</p>
+      <p>If approved, the action has been completed successfully.</p>
+    </div>
+  `;
+  try {
+    await transporter.sendMail({ from: 'archiviacap@gmail.com', to: email, subject, html });
+  } catch (err) {
+    console.error(`[Email Error] Failed to send outcome email: ${err.message}`);
   }
 };

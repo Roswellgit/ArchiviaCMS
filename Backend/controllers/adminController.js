@@ -7,7 +7,7 @@ const settingsModel = require('../models/settingsModel');
 const fileUploadService = require('../services/fileUploadService');
 const s3Service = require('../services/s3Service');
 const optionModel = require('../models/optionModel');
-const emailService = require('../services/emailService');
+const emailService = require('../services/emailService'); // ✅ Ensure imported
 const aiService = require('../services/aiService');
 const pool = require('../db');
 
@@ -15,7 +15,7 @@ const pool = require('../db');
 const generateSecurePassword = (length = 12) => {
   const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
   let password = "";
-  // Ensure strict requirements are met (1 Upper, 1 Lower, 1 Number, 1 Special)
+  // Ensure strict requirements are met
   password += "A"; 
   password += "a"; 
   password += "1"; 
@@ -26,7 +26,7 @@ const generateSecurePassword = (length = 12) => {
     password += charset.charAt(Math.floor(Math.random() * charset.length));
   }
   
-  // Shuffle the password to mix the forced characters
+  // Shuffle the password
   return password.split('').sort(() => 0.5 - Math.random()).join('');
 };
 
@@ -37,63 +37,38 @@ const generateSecurePassword = (length = 12) => {
 exports.createAccount = async (req, res) => {
   const client = await pool.connect(); 
   try {
-    // ✅ MODIFIED: Removed 'password' from request body destructuring.
-    // We ignore any password sent by the frontend.
     const { firstName, lastName, email, role, accessLevel, schoolId, studentProfile, groupId } = req.body;
-    
     const requester = req.user; 
 
     if (!firstName || !lastName || !email || !accessLevel || !schoolId) {
       return res.status(400).json({ message: 'All fields (including ID) are required' });
     }
 
-    // ✅ FORCE RANDOM PASSWORD GENERATION
-    // This ignores any user input for password and enforces system generation
     const tempPassword = generateSecurePassword();
-    // We use this generated password for hashing and emailing
     const password = tempPassword; 
 
-    // ==========================================
-    // ✅ STRICT ROLE HIERARCHY ENFORCEMENT
-    // ==========================================
-    
     let finalRole = role;
-
     if (requester.is_super_admin) {
-        // 1. Super Admin -> Can only create Admins
-        if (accessLevel !== 'Admin') {
-            return res.status(403).json({ message: 'Super Admins are only authorized to create Admin accounts.' });
-        }
+        if (accessLevel !== 'Admin') return res.status(403).json({ message: 'Super Admins are only authorized to create Admin accounts.' });
         finalRole = 'admin';
-    } 
-    else if (requester.is_admin) {
-        // 2. Admin -> Can only create Advisors
-        if (accessLevel !== 'Advisor') {
-            return res.status(403).json({ message: 'Admins are only authorized to create Advisor accounts.' });
-        }
+    } else if (requester.is_admin) {
+        if (accessLevel !== 'Advisor') return res.status(403).json({ message: 'Admins are only authorized to create Advisor accounts.' });
         finalRole = 'adviser';
-    } 
-    else if (requester.is_adviser) {
-        // 3. Advisor -> Can only create Students
-        if (accessLevel !== 'Student') {
-            return res.status(403).json({ message: 'Advisors are only authorized to create Student accounts.' });
-        }
+    } else if (requester.is_adviser) {
+        if (accessLevel !== 'Student') return res.status(403).json({ message: 'Advisors are only authorized to create Student accounts.' });
         finalRole = 'student';
-    } 
-    else {
+    } else {
         return res.status(403).json({ message: 'Permission denied.' });
     }
 
     await client.query('BEGIN'); 
 
-    // Check Email
     const emailCheck = await client.query('SELECT id FROM users WHERE email = $1', [email]);
     if (emailCheck.rows.length > 0) {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: 'User already exists with this email.' });
     }
 
-    // Check School ID
     const idCheck = await client.query('SELECT id FROM users WHERE school_id = $1', [schoolId]);
     if (idCheck.rows.length > 0) {
       await client.query('ROLLBACK');
@@ -101,12 +76,10 @@ exports.createAccount = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
     const isSuperAdminFlag = finalRole === 'superadmin';
     const isAdminFlag = finalRole === 'admin' || isSuperAdminFlag;
     const isAdviserFlag = finalRole === 'adviser';
     
-    // ✅ INSERT USER with force_password_change = TRUE
     const insertUserQuery = `
       INSERT INTO users (
         first_name, last_name, email, password_hash, 
@@ -126,7 +99,6 @@ exports.createAccount = async (req, res) => {
 
     const newUserId = userResult.rows[0].id;
 
-    // Save Academic Profile for Students
     if (accessLevel === 'Student' && studentProfile) {
       const { yearLevel, strand, section } = studentProfile;
       await client.query(
@@ -137,13 +109,12 @@ exports.createAccount = async (req, res) => {
 
     await client.query('COMMIT'); 
     
-    // Send email with the generated temporary password
     emailService.sendWelcomeEmail(email, firstName, password).catch(console.error);
 
     res.status(201).json({
       message: `Account created successfully as ${finalRole}.`,
       user: userResult.rows[0],
-      tempPassword: tempPassword // Returned for Admin's immediate view/copy
+      tempPassword: tempPassword 
     });
 
   } catch (error) {
@@ -329,7 +300,7 @@ exports.rejectUserArchive = async (req, res) => {
 };
 
 // ==========================================
-// 3. DOCUMENT MANAGEMENT
+// 3. DOCUMENT MANAGEMENT (UPDATED)
 // ==========================================
 
 exports.getPendingDocuments = async (req, res) => {
@@ -347,6 +318,14 @@ exports.approveDocument = async (req, res) => {
     const { id } = req.params;
     const doc = await documentModel.updateStatus(id, 'approved');
     if (!doc) return res.status(404).json({ message: "Document not found" });
+
+    // ✅ NOTIFICATION: Notify User of Approval
+    const owner = await userModel.getDocumentOwnerEmail(id);
+    if (owner) {
+        emailService.sendDocumentStatusUpdate(owner.email, owner.first_name, owner.title, 'approved')
+            .catch(err => console.error("Email Error (Approval):", err.message));
+    }
+
     res.json({ message: 'Document approved successfully', doc });
   } catch (error) {
     console.error(error);
@@ -357,8 +336,18 @@ exports.approveDocument = async (req, res) => {
 exports.rejectDocument = async (req, res) => {
   try {
     const { id } = req.params;
+    const { reason } = req.body; 
+
     const doc = await documentModel.updateStatus(id, 'rejected');
     if (!doc) return res.status(404).json({ message: "Document not found" });
+
+    // ✅ NOTIFICATION: Notify User of Rejection
+    const owner = await userModel.getDocumentOwnerEmail(id);
+    if (owner) {
+        emailService.sendDocumentStatusUpdate(owner.email, owner.first_name, owner.title, 'rejected', reason)
+            .catch(err => console.error("Email Error (Rejection):", err.message));
+    }
+
     res.json({ message: 'Document rejected', doc });
   } catch (error) {
     console.error(error);
@@ -401,8 +390,22 @@ exports.adminRequestArchive = async (req, res) => {
         const { id } = req.params;
         const { reason } = req.body;
         if (!reason) return res.status(400).json({ message: "Reason required." });
+        
         const archivedDoc = await documentModel.submitArchiveRequest(id, reason);
         if (!archivedDoc) return res.status(404).json({ message: "Document not found." });
+
+        // ✅ NOTIFICATION: Notify Super Admins
+        const superAdminEmails = await userModel.getSuperAdminEmails();
+        const doc = await documentModel.adminFindFileById(id); 
+        
+        emailService.sendSuperAdminRequestAlert(
+            superAdminEmails, 
+            'Archive', 
+            doc ? doc.title : 'Unknown Document', 
+            req.user.firstName,
+            reason
+        ).catch(err => console.error("Email Error (Archive Request):", err.message));
+
         res.json({ message: "Document has been flagged for archive review." });
     } catch (err) {
         console.error(err.message);
@@ -423,7 +426,7 @@ exports.restoreDocument = async (req, res) => {
 };
 
 // ==========================================
-// 4. REQUEST MANAGEMENT (Deletions & Archives)
+// 4. REQUEST MANAGEMENT (UPDATED)
 // ==========================================
 
 exports.getArchiveRequests = async (req, res) => {
@@ -440,11 +443,24 @@ exports.approveArchive = async (req, res) => {
   try {
     if (!req.user.is_super_admin) return res.status(403).json({ message: "Access Denied. Only Super Admins can approve archives." });
     const { id } = req.params;
+    
+    // Get info BEFORE deletion to send email
+    const owner = await userModel.getDocumentOwnerEmail(id); 
     const file = await documentModel.adminFindFileById(id);
+    
     if (!file) return res.status(404).json({ message: "Document not found." });
+    
     const deletedCount = await documentModel.adminDeleteById(id);
+    
     if (deletedCount > 0) {
       await s3Service.deleteFromS3(file.filename);
+      
+      // ✅ NOTIFICATION: Notify Owner
+      if (owner) {
+          emailService.sendRequestOutcome(owner.email, 'Archive', file.title, 'Approved and Completed')
+            .catch(err => console.error("Email Error (Archive Approved):", err.message));
+      }
+
       res.json({ message: "Archive request approved. Document permanently deleted." });
     }
   } catch (err) {
@@ -479,11 +495,23 @@ exports.approveDeletion = async (req, res) => {
   try {
     if (!req.user.is_super_admin) return res.status(403).json({ message: "Only Super Admins can approve deletions." });
     const { id } = req.params;
+    
+    const owner = await userModel.getDocumentOwnerEmail(id);
     const file = await documentModel.adminFindFileById(id);
+    
     if (!file) return res.status(404).json({ message: "Document not found." });
+    
     const deletedCount = await documentModel.adminDeleteById(id);
+    
     if (deletedCount > 0) {
       await s3Service.deleteFromS3(file.filename);
+      
+      // ✅ NOTIFICATION: Notify Owner
+      if (owner) {
+          emailService.sendRequestOutcome(owner.email, 'Deletion', file.title, 'Approved and Deleted')
+            .catch(err => console.error("Email Error (Deletion Approved):", err.message));
+      }
+
       res.json({ message: "Deletion request approved. Document deleted." });
     }
   } catch (err) {

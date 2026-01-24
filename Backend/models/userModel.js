@@ -318,3 +318,35 @@ exports.checkGroupHasStudent = async (groupId) => {
   );
   return rows.length > 0;
 };
+
+// ==========================================
+// ✅ NOTIFICATION HELPERS
+// ==========================================
+
+// ✅ MODIFIED: Get emails checking boolean flag ONLY
+exports.getSuperAdminEmails = async () => {
+  const { rows } = await db.query(
+    "SELECT email FROM users WHERE is_super_admin = TRUE"
+  );
+  return rows.map(r => r.email);
+};
+
+// ✅ MODIFIED: Get emails checking boolean flags ONLY (Admin OR Super Admin)
+exports.getAdminEmails = async () => {
+  const { rows } = await db.query(
+    "SELECT email FROM users WHERE is_admin = TRUE OR is_super_admin = TRUE"
+  );
+  return rows.map(r => r.email);
+};
+
+// Get document owner email by Document ID
+exports.getDocumentOwnerEmail = async (docId) => {
+  const { rows } = await db.query(
+    `SELECT u.email, u.first_name, d.title 
+     FROM documents d 
+     JOIN users u ON d.uploaded_by = u.id 
+     WHERE d.id = $1`,
+    [docId]
+  );
+  return rows[0]; // Returns { email, first_name, title }
+};
