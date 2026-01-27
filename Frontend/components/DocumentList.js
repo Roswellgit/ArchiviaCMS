@@ -36,8 +36,6 @@ export default function DocumentList({
     const itemsPerPage = 6; 
 
 useEffect(() => {
-        // ✅ This ensures that if the URL query 'q' becomes empty, 
-        // the search input box also clears.
         setSearchTerm(initialSearchTerm || '');
     }, [initialSearchTerm]);
 

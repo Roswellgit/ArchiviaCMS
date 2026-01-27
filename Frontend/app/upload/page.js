@@ -10,7 +10,6 @@ export default function UploadPage() {
   const { user, authLoading } = useAuth();
 
   useEffect(() => {
-    // Redirect super admins away from upload (if that is the intended logic)
     if (!authLoading && user?.is_super_admin) {
         router.push('/'); 
     }

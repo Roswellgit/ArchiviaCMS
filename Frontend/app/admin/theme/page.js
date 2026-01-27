@@ -12,8 +12,6 @@ import {
   adminResetSettings 
 } from '../../../services/apiService';
 import { toast } from 'react-hot-toast';
-
-// --- Reusable Confirmation Modal ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
   if (!isOpen) return null;
   return (
@@ -35,7 +33,6 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
 };
 
 export default function AdminThemeManagement() {
-  // --- STATE ---
   const [settings, setSettings] = useState({
     backgroundColor: '#f8fafc', 
     foregroundColor: '#0f172a', 
@@ -53,11 +50,7 @@ export default function AdminThemeManagement() {
   const [bgImageFile, setBgImageFile] = useState(null);
   const [brandIconFile, setBrandIconFile] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // Modal State
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, type: '' });
-
-  // --- LOAD DATA ---
   useEffect(() => {
     getSettings().then(res => { 
         setSettings(prev => ({ ...prev, ...res.data })); 
@@ -68,8 +61,6 @@ export default function AdminThemeManagement() {
         setLoading(false); 
     });
   }, []);
-
-  // --- FORM HANDLERS ---
   const handleSettingChange = (e) => setSettings({ ...settings, [e.target.name]: e.target.value });
   const handleColorChange = (key, val) => setSettings({ ...settings, [key]: val });
 
@@ -85,8 +76,6 @@ export default function AdminThemeManagement() {
         setLoading(false); 
     }
   };
-
-  // --- UPLOAD HANDLERS ---
   const handleBgSubmit = async () => {
       if (!bgImageFile) return toast.error("Please select a background file first."); 
       setLoading(true);
@@ -118,15 +107,13 @@ export default function AdminThemeManagement() {
           setLoading(false); 
       }
   };
-
-  // --- MODAL ACTION LOGIC ---
   const initiateConfirm = (type) => {
     setConfirmConfig({ isOpen: true, type });
   };
 
   const executeAction = async () => {
     const { type } = confirmConfig;
-    setConfirmConfig({ ...confirmConfig, isOpen: false }); // Close modal immediately
+    setConfirmConfig({ ...confirmConfig, isOpen: false });
     setLoading(true);
 
     try {

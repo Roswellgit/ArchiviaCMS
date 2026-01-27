@@ -10,8 +10,6 @@ const s3Client = new S3Client({
 });
 
 const BUCKET_NAME = process.env.AWS_BUCKET_NAME;
-
-// MODIFIED: Accepts 'isPublic' flag
 exports.uploadToS3 = async (file, filename, isPublic = false) => {
   const body = file.buffer ? file.buffer : file;
   const contentType = file.mimetype ? file.mimetype : 'application/pdf';
@@ -22,7 +20,6 @@ exports.uploadToS3 = async (file, filename, isPublic = false) => {
     Body: body,
     ContentType: contentType,
     ContentDisposition: isPublic ? 'inline' : 'attachment',
-    // ADD THIS LINE BELOW to actually make the file public
     ACL: isPublic ? 'public-read' : undefined, 
   };
 

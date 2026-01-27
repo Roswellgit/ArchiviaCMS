@@ -7,32 +7,23 @@ const settingsModel = require('../models/settingsModel');
 const fileUploadService = require('../services/fileUploadService');
 const s3Service = require('../services/s3Service');
 const optionModel = require('../models/optionModel');
-const emailService = require('../services/emailService'); // ✅ Ensure imported
+const emailService = require('../services/emailService'); 
 const aiService = require('../services/aiService');
 const pool = require('../db');
 
-// ✅ HELPER: Generate Secure Random Password
+
 const generateSecurePassword = (length = 12) => {
   const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
   let password = "";
-  // Ensure strict requirements are met
   password += "A"; 
   password += "a"; 
   password += "1"; 
-  password += "!"; 
-  
-  // Fill the rest randomly
+  password += "!";
   for (let i = 0; i < length - 4; i++) {
     password += charset.charAt(Math.floor(Math.random() * charset.length));
   }
-  
-  // Shuffle the password
   return password.split('').sort(() => 0.5 - Math.random()).join('');
 };
-
-// ==========================================
-// 1. ACCOUNT & GROUP CREATION
-// ==========================================
 
 exports.createAccount = async (req, res) => {
   const client = await pool.connect(); 
@@ -190,10 +181,6 @@ exports.deleteGroup = async (req, res) => {
   }
 };
 
-// ==========================================
-// 2. USER MANAGEMENT
-// ==========================================
-
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await userModel.findAll();
@@ -299,21 +286,12 @@ exports.rejectUserArchive = async (req, res) => {
   }
 };
 
-// ==========================================
-// 3. DOCUMENT MANAGEMENT (UPDATED)
-// ==========================================
-
 exports.getPendingDocuments = async (req, res) => {
   try {
-    // 1. Get raw documents from DB
     const docs = await documentModel.findPending();
-
-    // 2. ✅ FIX: Generate Presigned S3 URLs for each document
-    // This turns "documents/file.pdf" into a clickable "https://s3.amazonaws.com/..." link
     const docsWithLinks = await Promise.all(docs.map(async (doc) => {
         if (doc.filepath) {
             try {
-                // Ensure s3Service is imported at the top of your file!
                 const url = await s3Service.getPresignedUrl(doc.filepath);
                 return { ...doc, downloadLink: url };
             } catch (e) {
@@ -336,8 +314,6 @@ exports.approveDocument = async (req, res) => {
     const { id } = req.params;
     const doc = await documentModel.updateStatus(id, 'approved');
     if (!doc) return res.status(404).json({ message: "Document not found" });
-
-    // ✅ NOTIFICATION: Notify User of Approval
     const owner = await userModel.getDocumentOwnerEmail(id);
     if (owner) {
         emailService.sendDocumentStatusUpdate(owner.email, owner.first_name, owner.title, 'approved')
@@ -350,21 +326,15 @@ exports.approveDocument = async (req, res) => {
     res.status(500).json({ error: 'Failed to approve document' });
   }
 };
-
-// ✅ REJECT = PERMANENT DELETE + NOTIFICATION
 exports.rejectDocument = async (req, res) => {
   try {
     const { id } = req.params;
-    const { reason } = req.body || {}; // Safety check for body
-
-    // 1. GET DATA FIRST: We must fetch owner info BEFORE deleting the record
+    const { reason } = req.body || {};
     const owner = await userModel.getDocumentOwnerEmail(id);
 
     if (!owner) {
         return res.status(404).json({ message: "Document not found" });
     }
-
-    // 2. SEND NOTIFICATION (Try/Catch ensures email failure doesn't stop deletion)
     try {
         if (owner.email) {
             const finalReason = reason || 'No specific reason provided.';
@@ -373,16 +343,13 @@ exports.rejectDocument = async (req, res) => {
                 owner.email, 
                 owner.first_name, 
                 owner.title, 
-                'rejected', // Status text for the email
+                'rejected',
                 finalReason
             );
         }
     } catch (emailErr) {
         console.warn("Email Notification Failed (Non-fatal):", emailErr.message);
     }
-
-    // 3. PERMANENTLY DELETE: Remove from DB (and S3/Storage if your model handles it)
-    // Note: We use deleteDocument instead of updateStatus
     await documentModel.deleteDocument(id); 
 
     res.json({ message: 'Document rejected and permanently deleted.' });
@@ -430,8 +397,6 @@ exports.adminRequestArchive = async (req, res) => {
         
         const archivedDoc = await documentModel.submitArchiveRequest(id, reason);
         if (!archivedDoc) return res.status(404).json({ message: "Document not found." });
-
-        // ✅ NOTIFICATION: Notify Super Admins
         const superAdminEmails = await userModel.getSuperAdminEmails();
         const doc = await documentModel.adminFindFileById(id); 
         
@@ -462,10 +427,6 @@ exports.restoreDocument = async (req, res) => {
   }
 };
 
-// ==========================================
-// 4. REQUEST MANAGEMENT (UPDATED)
-// ==========================================
-
 exports.getArchiveRequests = async (req, res) => {
   try {
     const requests = await documentModel.findAllArchiveRequests();
@@ -480,8 +441,6 @@ exports.approveArchive = async (req, res) => {
   try {
     if (!req.user.is_super_admin) return res.status(403).json({ message: "Access Denied. Only Super Admins can approve archives." });
     const { id } = req.params;
-    
-    // Get info BEFORE deletion to send email
     const owner = await userModel.getDocumentOwnerEmail(id); 
     const file = await documentModel.adminFindFileById(id);
     
@@ -491,8 +450,6 @@ exports.approveArchive = async (req, res) => {
     
     if (deletedCount > 0) {
       await s3Service.deleteFromS3(file.filename);
-      
-      // ✅ NOTIFICATION: Notify Owner
       if (owner) {
           emailService.sendRequestOutcome(owner.email, 'Archive', file.title, 'Approved and Completed')
             .catch(err => console.error("Email Error (Archive Approved):", err.message));
@@ -542,8 +499,6 @@ exports.approveDeletion = async (req, res) => {
     
     if (deletedCount > 0) {
       await s3Service.deleteFromS3(file.filename);
-      
-      // ✅ NOTIFICATION: Notify Owner
       if (owner) {
           emailService.sendRequestOutcome(owner.email, 'Deletion', file.title, 'Approved and Deleted')
             .catch(err => console.error("Email Error (Deletion Approved):", err.message));
@@ -568,10 +523,6 @@ exports.rejectDeletion = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
-
-// ==========================================
-// 5. ANALYTICS & DASHBOARD
-// ==========================================
 
 exports.getDashboardStats = async (req, res) => {
   try {
@@ -649,10 +600,6 @@ exports.getAnalyticsAiInsight = async (req, res) => {
     res.status(500).json({ insight: "Automated insight could not be generated at this time." });
   }
 };
-
-// ==========================================
-// 6. SETTINGS & FORM OPTIONS
-// ==========================================
 
 exports.updateSettings = async (req, res) => {
   try {
@@ -797,10 +744,6 @@ exports.deleteFormOption = async (req, res) => {
     res.status(500).json({ message: 'Error deleting option' });
   }
 };
-
-// ==========================================
-// 7. GROUP MEMBERSHIP MANAGEMENT
-// ==========================================
 
 exports.getGroupMembers = async (req, res) => {
   try {

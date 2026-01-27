@@ -193,8 +193,6 @@ exports.generateGraphDescription = async (graphData) => {
   }
   return "Unable to generate graph analysis at this time.";
 };
-
-// --- FIX: Corrected this function to use ai.models.generateContent ---
 exports.generateDashboardInsight = async (data) => {
   try {
     const prompt = `
@@ -209,8 +207,6 @@ exports.generateDashboardInsight = async (data) => {
 
       Focus on the trends and most active research areas. Do not use markdown or bullet points, just a paragraph.
     `;
-
-    // Updated Syntax for @google/genai
     const response = await ai.models.generateContent({
       model: model,
       contents: [{ role: 'user', parts: [{ text: prompt }] }]

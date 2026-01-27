@@ -1,7 +1,6 @@
 const db = require('../db');
 
 exports.findAll = async (includeArchived = false) => {
-  // If includeArchived is FALSE (Public User), we only show active AND approved docs
   let query = `
     SELECT id, title, filename, filepath, preview_urls, created_at, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id, deletion_requested, archive_requested, archive_reason, status 
     FROM documents
@@ -69,8 +68,6 @@ exports.findByTerm = async (term, includeArchived = false) => {
   const { rows } = await db.query(query, params);
   return rows;
 };
-
-// MODIFIED: Explicitly sets status to 'pending' on creation
 exports.create = async ({ title, filename, filepath, preview_urls, ai_keywords, ai_authors, ai_date_created, ai_journal, ai_abstract, user_id }) => {
   const safePreviewUrls = preview_urls || [];
   const { rows } = await db.query(
@@ -102,9 +99,7 @@ exports.filterByFacets = async ({ keywords, year, journal, dateRange }, includeA
     const conditions = keywords.map(k => { params.push(`%${k}%`); return `ai_keywords::text ILIKE $${paramIndex++}`; });
     query += ` AND (${conditions.join(' OR ')})`;
   }
-  // ✅ Replace the current "if (year)" block with this:
 if (year) {
-  // Ensure 'year' is always an array to simplify processing
   const yearArray = Array.isArray(year) ? year : [year];
   const yearConditions = [];
 
@@ -114,8 +109,6 @@ if (year) {
       yearConditions.push(`ai_date_created::text ILIKE $${paramIndex++}`);
     }
   });
-
-  // Use OR so we find documents matching ANY of the selected years
   if (yearConditions.length > 0) {
     query += ` AND (${yearConditions.join(' OR ')})`;
   }
@@ -137,8 +130,6 @@ if (year) {
   return rows;
 };
 
-// --- NEW ADMIN METHODS ---
-
 exports.findPending = async () => {
   const { rows } = await db.query(
     `SELECT * FROM documents WHERE status = 'pending' ORDER BY created_at ASC`
@@ -153,8 +144,6 @@ exports.updateStatus = async (id, status) => {
   );
   return rows[0];
 };
-
-// --- EXISTING METHODS ---
 
 exports.findByUser = async (userId) => {
   const { rows } = await db.query('SELECT * FROM documents WHERE user_id = $1 ORDER BY created_at DESC', [userId]);

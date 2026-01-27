@@ -3,9 +3,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import api from '../services/apiService'; 
-
-// --- Helper: Requirement Item ---
+import api from '../services/apiService';
 const RequirementItem = ({ met, text }) => (
   <li className={`flex items-center gap-2 text-xs ${met ? 'text-emerald-600 font-medium' : 'text-slate-400'}`}>
     <span className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] ${met ? 'bg-emerald-100' : 'bg-slate-100'}`}>
@@ -20,8 +18,6 @@ export default function FirstLoginModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [loading, setLoading] = useState(false);
-  
-  // UI State
   const [showPassword, setShowPassword] = useState(false);
   const [passwordValidity, setPasswordValidity] = useState({
     hasLength: false, hasUpper: false, hasLower: false, hasNumber: false, hasSpecial: false,
@@ -36,8 +32,6 @@ export default function FirstLoginModal() {
         setIsOpen(false);
     }
   }, [user]);
-
-  // Check validity whenever password changes
   useEffect(() => {
     const pwd = formData.newPassword || '';
     setPasswordValidity({

@@ -6,9 +6,7 @@ import {
   addFormOption, 
   deleteFormOption 
 } from '../services/apiService'; 
-import { useAuth } from '../context/AuthContext'; 
-
-// --- HELPER: Manageable Select (Unchanged) ---
+import { useAuth } from '../context/AuthContext';
 const ManageableSelect = ({ label, type, value, setValue, list, canManage, fetchOptions }) => {
   const [isManaging, setIsManaging] = useState(false);
   const [newItem, setNewItem] = useState('');
@@ -76,9 +74,7 @@ const ManageableSelect = ({ label, type, value, setValue, list, canManage, fetch
 };
 
 const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
-  const { user } = useAuth(); 
-
-  // 1. ADD MOUNTED STATE FOR NEXT.JS PORTAL SAFETY
+  const { user } = useAuth();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -88,8 +84,6 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
   const roleName = (user?.role || '').toLowerCase();
   const isAdvisor = !!user?.is_adviser || roleName === 'adviser' || roleName === 'advisor';
-
-  // ✅ UPDATED: Removed password from state
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', email: '', schoolId: '', 
   });
@@ -103,8 +97,6 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [canManageOptions, setCanManageOptions] = useState(false);
-
-  // Lock background scroll when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -197,11 +189,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
-
-  // 2. CHECK IF MOUNTED BEFORE RENDERING PORTAL
   if (!isOpen || !mounted) return null;
-
-  // 3. USE PORTAL TO ATTACH TO BODY
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in p-4">
       
@@ -312,7 +300,7 @@ const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
         </form>
       </div>
     </div>,
-    document.body // 👈 ATTACH TO BODY
+    document.body
   );
 };
 

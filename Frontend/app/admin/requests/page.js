@@ -11,8 +11,6 @@ import {
   adminRejectArchive 
 } from '../../../services/apiService';
 import { toast } from 'react-hot-toast';
-
-// --- Reusable Confirmation Modal ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
   if (!isOpen) return null;
   return (
@@ -36,11 +34,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
 export default function AdminRequestsPage() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // --- BULK STATE ---
   const [selectedIds, setSelectedIds] = useState([]);
-
-  // Modal State (id: null means bulk action)
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, action: '', id: null });
 
   const searchParams = useSearchParams();
@@ -62,7 +56,7 @@ export default function AdminRequestsPage() {
       
       const data = response && response.data ? response.data : [];
       setRequests(Array.isArray(data) ? data : []);
-      setSelectedIds([]); // Reset selection on fetch
+      setSelectedIds([]);
     } catch (error) {
       console.error(`Failed to fetch ${filterType} requests`, error);
       toast.error("Failed to load requests");
@@ -71,30 +65,21 @@ export default function AdminRequestsPage() {
       setLoading(false);
     }
   };
-
-  // --- HELPER: PARSE REASON ---
-  // This cleans up the JSON string ({"reason": "..."}) into plain text
   const formatReason = (text) => {
     if (!text) return "No reason provided";
     try {
-        // If it looks like a JSON object string, try to parse it
         if (typeof text === 'string' && (text.startsWith('{') || text.startsWith('['))) {
             const parsed = JSON.parse(text);
-            // Return the inner 'reason' property if it exists, otherwise return the text
             return parsed.reason || text;
         }
-        // If it's already an object (rare but possible with some axios setups)
         if (typeof text === 'object' && text.reason) {
             return text.reason;
         }
     } catch (e) {
-        // If parsing fails, just return the original text
         return text;
     }
     return text;
   };
-
-  // --- BULK SELECTION HANDLERS ---
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedIds(requests.map(req => req.id));
@@ -110,8 +95,6 @@ export default function AdminRequestsPage() {
       setSelectedIds(prev => prev.filter(itemId => itemId !== id));
     }
   };
-
-  // --- HANDLERS ---
   
   const initiateAction = (action, id = null) => {
     setConfirmConfig({ isOpen: true, action, id });
@@ -119,12 +102,9 @@ export default function AdminRequestsPage() {
 
   const executeAction = async () => {
     const { action, id } = confirmConfig;
-    
-    // Close modal immediately for better UX
     setConfirmConfig({ ...confirmConfig, isOpen: false });
 
     try {
-        // Determine targets: Single ID or Bulk Selection
         const idsToProcess = id ? [id] : selectedIds;
 
         if (action === 'approve') {
@@ -145,7 +125,7 @@ export default function AdminRequestsPage() {
             }
         }
         
-        fetchRequests(); // Refresh list
+        fetchRequests();
     } catch (error) {
         toast.error(`${action === 'approve' ? 'Approval' : 'Rejection'} failed`);
         console.error(error);
@@ -227,7 +207,6 @@ export default function AdminRequestsPage() {
                     
                     <p className="text-sm text-gray-500">
                       <span className="font-medium text-slate-700">Reason:</span> {
-                        // Apply the helper function here to clean the text
                         formatReason(
                             filterType === 'archiving' 
                             ? request.archive_reason 

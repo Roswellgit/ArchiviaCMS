@@ -6,8 +6,6 @@ const s3Service = require('../services/s3Service');
 const previewService = require('../services/previewService');
 const watermarkService = require('../services/watermarkService'); 
 const path = require('path');
-
-// ✅ NEW IMPORTS for notifications
 const userModel = require('../models/userModel');
 const emailService = require('../services/emailService');
 
@@ -165,8 +163,6 @@ exports.uploadDocument = (req, res) => {
     if (req.file.size === 0) {
         return res.status(400).json({ message: 'The uploaded file is empty.' });
     }
-
-    // --- WATERMARK LOGIC ---
     if (req.file.mimetype === 'application/pdf') {
         try {
             const watermarkedBuffer = await watermarkService.addWatermarkToPdf(
@@ -232,19 +228,15 @@ exports.uploadDocument = (req, res) => {
         };
 
         const newDocument = await documentModel.create(documentData);
-
-        // ✅ NOTIFICATION 1: Notify User (FIXED: Use first_name from DB/Middleware)
         emailService.sendUploadConfirmation(
             req.user.email, 
-            req.user.first_name, // Fixed: was firstName
+            req.user.first_name,
             metadata.title
         ).catch(err => console.error("Email Error (User Upload):", err.message));
-
-        // ✅ NOTIFICATION 2: Notify Admins (FIXED: Use first_name/last_name)
         const adminEmails = await userModel.getAdminEmails();
         emailService.sendNewDocumentAlert(
             adminEmails, 
-            `${req.user.first_name} ${req.user.last_name}`, // Fixed: was firstName/lastName
+            `${req.user.first_name} ${req.user.last_name}`,
             metadata.title
         ).catch(err => console.error("Email Error (Admin Alert):", err.message));
 
@@ -319,8 +311,6 @@ exports.requestDeleteDocument = async (req, res) => {
     if (!result) {
       return res.status(404).json({ message: "Document not found or unauthorized." });
     }
-
-    // ✅ NOTIFICATION: Notify Super Admins
     const superAdminEmails = await userModel.getSuperAdminEmails();
     const doc = await documentModel.adminFindFileById(id); 
     
@@ -328,7 +318,7 @@ exports.requestDeleteDocument = async (req, res) => {
         superAdminEmails, 
         'Deletion', 
         doc ? doc.title : 'Unknown Document', 
-        `${req.user.first_name} ${req.user.last_name}`, // Fixed: variable names
+        `${req.user.first_name} ${req.user.last_name}`,
         reason
     ).catch(err => console.error("Email Error (Deletion Request):", err.message));
 
@@ -350,8 +340,6 @@ exports.generateCitation = async (req, res) => {
     res.status(500).json({ message: "Server error generating citation" });
   }
 };
-
-// ✅ UPDATED: Added Notification Logic for Approval
 exports.approveDocument = async (req, res) => {
   try {
     const { id } = req.params;
@@ -360,8 +348,6 @@ exports.approveDocument = async (req, res) => {
     if (!updatedDoc) {
       return res.status(404).json({ message: "Document not found." });
     }
-
-    // 📧 Notify Owner
     const owner = await userModel.getDocumentOwnerEmail(id);
     if (owner) {
         emailService.sendDocumentStatusUpdate(owner.email, owner.first_name, owner.title, 'approved')
@@ -374,20 +360,16 @@ exports.approveDocument = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
-
-// ✅ NEW: Added Rejection Logic with Notification
 exports.rejectDocument = async (req, res) => {
   try {
     const { id } = req.params;
-    const { reason } = req.body; // Capture reason
+    const { reason } = req.body;
 
     const updatedDoc = await documentModel.updateStatus(id, 'rejected');
 
     if (!updatedDoc) {
       return res.status(404).json({ message: "Document not found." });
     }
-
-    // 📧 Notify Owner
     const owner = await userModel.getDocumentOwnerEmail(id);
     if (owner) {
         emailService.sendDocumentStatusUpdate(owner.email, owner.first_name, owner.title, 'rejected', reason)

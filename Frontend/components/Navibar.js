@@ -11,9 +11,7 @@ export default function Navbar() {
   const router = useRouter(); 
   
   const [isDropdownOpen, setIsDropdownOpen] = useState(false); 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); 
-
-  // --- ROLE CHECKS ---
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isSuperAdmin = user?.is_super_admin;
   const isAdmin = user?.is_admin || isSuperAdmin; 
   const isAdvisor = user?.is_adviser; 
@@ -21,7 +19,6 @@ export default function Navbar() {
   const isPrivileged = isAdmin || isAdvisor;
 
   const isAuthPage = pathname === '/login' || pathname === '/register';
-  // Logic to show Sign In only if not authenticated and not already on the login page
   const shouldShowLoginLink = !isAuthenticated && pathname !== '/login';
 
   useEffect(() => {

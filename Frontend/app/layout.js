@@ -4,7 +4,7 @@ import Navbar from "../components/Navibar";
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from '../context/AuthContext'; 
 import { Toaster } from 'react-hot-toast';
-import FirstLoginModal from "../components/FirstLoginModal"; // ✅ IMPORTED
+import FirstLoginModal from "../components/FirstLoginModal";
 
 export const dynamic = 'force-dynamic'; 
 
@@ -52,23 +52,16 @@ export default async function RootLayout({ children }) {
 
   const customStyles = `
     :root {
-      /* Page */
       --background-color: ${settings?.backgroundColor || '#ffffff'};
       --background-image: ${bgImageUrl};
       --foreground: ${settings?.foregroundColor || '#171717'};
-      
-      /* Navbar */
       --navbar-bg-color: ${settings?.navbarBgColor || '#1e293b'};
       --navbar-text-color: ${settings?.navbarTextColor || '#ffffff'};
       --navbar-link-color: ${settings?.navbarLinkColor || '#ffffff'};
-      
-      /* Brand */
       --navbar-brand-font: ${settings?.navbarBrandFont || 'var(--font-geist-sans)'};
       --navbar-brand-size: ${settings?.navbarBrandSize || '1.5rem'};
       --navbar-brand-weight: ${settings?.navbarBrandWeight || '700'};
       --navbar-brand-text: '${settings?.navbarBrandText || 'Archivia'}';
-      
-      /* Brand Icon (Computed) */
       --brand-icon-url: ${brandIconUrl};
       --brand-icon-display: ${brandIconUrl === 'none' ? 'none' : 'inline-block'};
     }

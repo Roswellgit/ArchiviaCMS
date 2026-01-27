@@ -5,8 +5,6 @@ import { getUserArchiveRequests, adminApproveUserArchive, adminRejectUserArchive
 import { useAuth } from '../../../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-
-// --- Reusable Confirmation Modal ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
   if (!isOpen) return null;
   return (
@@ -30,11 +28,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
 export default function AdminArchiveRequestsPage() {
   const [userRequests, setUserRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // --- BULK STATE ---
   const [selectedRequestIds, setSelectedRequestIds] = useState([]);
-
-  // Modal State (id: null means bulk action)
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, type: '', id: null });
 
   const { user, authLoading } = useAuth();
@@ -48,13 +42,11 @@ export default function AdminArchiveRequestsPage() {
     try {
       const res = await getUserArchiveRequests();
       setUserRequests(res.data || res);
-      setSelectedRequestIds([]); // Reset selection on fetch
+      setSelectedRequestIds([]);
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
   useEffect(() => { if(user?.is_super_admin) fetchData(); }, [user]);
-
-  // --- BULK SELECTION HANDLERS ---
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedRequestIds(userRequests.map(r => r.id));
@@ -71,32 +63,24 @@ export default function AdminArchiveRequestsPage() {
     }
   };
 
-  // --- HANDLERS ---
-
   const initiateAction = (type, id = null) => {
     setConfirmConfig({ isOpen: true, type, id });
   };
 
   const executeAction = async () => {
     const { type, id } = confirmConfig;
-    
-    // Close modal immediately
     setConfirmConfig({ ...confirmConfig, isOpen: false });
 
     try {
-        // Determine if we are processing a single ID or the bulk selection
         const idsToProcess = id ? [id] : selectedRequestIds;
 
         if (type === 'approve') {
-            // "Approve" means Deactivate User in this context
             await Promise.all(idsToProcess.map(reqId => adminApproveUserArchive(reqId)));
             toast.success(`${idsToProcess.length > 1 ? 'Users' : 'User'} deactivated successfully.`);
         } else if (type === 'reject') {
             await Promise.all(idsToProcess.map(reqId => adminRejectUserArchive(reqId)));
             toast.success(`${idsToProcess.length > 1 ? 'Requests' : 'Request'} rejected.`);
         }
-        
-        // Refresh Data
         fetchData();
     } catch (err) { 
         toast.error("Action failed."); 
@@ -105,8 +89,6 @@ export default function AdminArchiveRequestsPage() {
   };
 
   if (!user?.is_super_admin) return null;
-
-  // --- REQUEST CARD COMPONENT ---
   const RequestCard = ({ req, onReject, onRequestApprove }) => (
     <div className={`bg-white p-6 rounded-xl shadow-md border-l-4 border-l-orange-500 border-y border-r border-slate-100 flex flex-col md:flex-row justify-between items-start gap-4 transition-all ${selectedRequestIds.includes(req.id) ? 'ring-2 ring-orange-400 bg-orange-50/10' : ''}`}>
         
@@ -216,7 +198,7 @@ export default function AdminArchiveRequestsPage() {
             : "Are you sure you want to reject these requests? The users will remain active."
         }
         confirmText={confirmConfig.type === 'approve' ? 'Deactivate' : 'Reject'}
-        isDanger={confirmConfig.type === 'approve'} // Deactivation is the "dangerous" action here
+        isDanger={confirmConfig.type === 'approve'}
       />
     </div>
   );

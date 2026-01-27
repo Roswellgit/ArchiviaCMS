@@ -12,10 +12,6 @@ const adminMiddleware = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    
-    // ❌ OLD: if (!decoded.is_admin) { ... }
-    
-    // ✅ NEW: Check for Admin OR Super Admin OR Advisor
     const isPrivileged = decoded.is_admin || decoded.is_super_admin || decoded.is_adviser;
 
     if (!isPrivileged) {

@@ -3,17 +3,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
-import { login as apiLogin } from '../services/apiService'; // Removed googleLogin import
+import { login as apiLogin } from '../services/apiService';
 import { toast } from 'react-hot-toast';
-// Removed @react-oauth/google and jwt-decode imports
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  // Removed Google-specific state variables (showGoogleModal, googleUser, googleToken)
 
   const router = useRouter();
   const { login } = useAuth();
@@ -48,8 +45,6 @@ export default function LoginForm() {
     }
   };
 
-  // Removed performGoogleRegistration function
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
@@ -58,8 +53,6 @@ export default function LoginForm() {
     }
     performLogin(email, password);
   };
-
-  // Removed handleGoogleSuccess function
 
   return (
     <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 w-full max-w-md mx-auto relative overflow-hidden">
@@ -126,9 +119,7 @@ export default function LoginForm() {
         </button>
       </form>
 
-      {/* Removed "Or continue with" divider */}
-      {/* Removed GoogleLogin Button */}
-      {/* Removed Google Registration Password Modal */}
+
 
     </div>
   );

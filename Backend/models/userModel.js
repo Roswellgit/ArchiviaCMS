@@ -1,6 +1,4 @@
 const db = require('../db');
-
-// --- UPDATED: Added 'force_password_change' to the select list ---
 exports.findByEmail = async (email) => {
   const { rows } = await db.query(
     'SELECT id, first_name, role, last_name, email, password_hash, is_admin, is_super_admin, is_adviser, is_verified, otp_code, otp_expires, is_active, job_title, force_password_change FROM users WHERE email = $1',
@@ -8,22 +6,16 @@ exports.findByEmail = async (email) => {
   );
   return rows[0];
 };
-
-// --- UPDATED ACCOUNT CREATION ---
 exports.createAccount = async ({ firstName, lastName, email, passwordHash, role, groupId }) => {
   let isAdmin = false;
   let isSuperAdmin = false;
   let isAdviser = false;
-
-  // Determine flags based on role
   switch (role) {
     case 'superadmin':
     case 'principal': 
       isSuperAdmin = true;
       isAdmin = true;
       break;
-    
-    // Admin Level roles
     case 'admin':
     case 'assistant_principal':
     case 'research_coordinator':
@@ -38,11 +30,7 @@ exports.createAccount = async ({ firstName, lastName, email, passwordHash, role,
       role = 'student';
       break;
   }
-
-  // Ensure groupId is null if not provided
   const groupValue = groupId || null;
-
-  // ✅ UPDATED: Insert force_password_change = TRUE for admin-created accounts
   const { rows } = await db.query(
     `INSERT INTO users 
       (first_name, last_name, email, password_hash, role, is_admin, is_super_admin, is_adviser, is_verified, is_active, group_id, force_password_change) 
@@ -53,18 +41,11 @@ exports.createAccount = async ({ firstName, lastName, email, passwordHash, role,
   return rows[0];
 };
 
-// ==========================================
-// GROUP MANAGEMENT
-// ==========================================
-
 exports.createGroup = async (name, adviserId) => {
-  // 1. Check for duplicates (Case Insensitive)
   const check = await db.query('SELECT id FROM groups WHERE LOWER(name) = LOWER($1)', [name]);
   if (check.rows.length > 0) {
     throw new Error('Group name already exists');
   }
-
-  // 2. Insert new group
   const { rows } = await db.query(
     'INSERT INTO groups (name, adviser_id) VALUES ($1, $2) RETURNING *',
     [name, adviserId]
@@ -73,15 +54,10 @@ exports.createGroup = async (name, adviserId) => {
 };
 
 exports.deleteGroup = async (groupId) => {
-  // 1. Unassign users from this group first to avoid errors
   await db.query('UPDATE users SET group_id = NULL WHERE group_id = $1', [groupId]);
-  
-  // 2. Delete the group
   const result = await db.query('DELETE FROM groups WHERE id = $1 RETURNING *', [groupId]);
   return result.rowCount > 0;
 };
-
-// ✅ NEW: Get all members of a specific group
 exports.getGroupMembers = async (groupId) => {
   const { rows } = await db.query(
     `SELECT id, first_name, last_name, email, role, school_id 
@@ -92,23 +68,14 @@ exports.getGroupMembers = async (groupId) => {
   );
   return rows;
 };
-
-// ✅ NEW: Assign a student to a group
 exports.assignStudentToGroup = async (userId, groupId) => {
   await db.query('UPDATE users SET group_id = $1 WHERE id = $2', [groupId, userId]);
 };
-
-// ✅ NEW: Remove a student from a group
 exports.removeStudentFromGroup = async (userId) => {
   await db.query('UPDATE users SET group_id = NULL WHERE id = $1', [userId]);
 };
 
-// ==========================================
-// EXISTING METHODS
-// ==========================================
-
 exports.createWithOTP = async ({ firstName, lastName, email, passwordHash, otp, otpExpires }) => {
-  // Self-registered users set their own password, so force_password_change is FALSE (Default)
   const { rows } = await db.query(
     `INSERT INTO users (first_name, last_name, email, password_hash, otp_code, otp_expires, is_verified, is_active, role, force_password_change) 
      VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, 'student', FALSE) 
@@ -239,16 +206,12 @@ exports.findByResetToken = async (token) => {
   );
   return rows[0];
 };
-
-// ✅ UPDATED: Setting a new password clears the force_password_change flag
 exports.updatePassword = async (userId, passwordHash) => {
   await db.query(
     'UPDATE users SET password_hash = $1, reset_password_token = NULL, reset_password_expires = NULL, force_password_change = FALSE WHERE id = $2',
     [passwordHash, userId]
   );
 };
-
-// --- UPDATED: Added 'force_password_change' to select ---
 exports.findById = async (id) => {
   const { rows } = await db.query(
     'SELECT id, first_name, last_name, email, role, is_admin, is_super_admin, is_adviser, is_active, force_password_change FROM users WHERE id = $1', 
@@ -318,28 +281,18 @@ exports.checkGroupHasStudent = async (groupId) => {
   );
   return rows.length > 0;
 };
-
-// ==========================================
-// ✅ NOTIFICATION HELPERS
-// ==========================================
-
-// ✅ MODIFIED: Get emails checking boolean flag ONLY
 exports.getSuperAdminEmails = async () => {
   const { rows } = await db.query(
     "SELECT email FROM users WHERE is_super_admin = TRUE"
   );
   return rows.map(r => r.email);
 };
-
-// ✅ MODIFIED: Get emails checking boolean flags ONLY (Admin OR Super Admin)
 exports.getAdminEmails = async () => {
   const { rows } = await db.query(
     "SELECT email FROM users WHERE is_admin = TRUE OR is_super_admin = TRUE"
   );
   return rows.map(r => r.email);
 };
-
-// Get document owner email by Document ID
 exports.getDocumentOwnerEmail = async (docId) => {
   const { rows } = await db.query(
     `SELECT u.email, u.first_name, d.title 

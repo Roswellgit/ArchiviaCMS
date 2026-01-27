@@ -6,8 +6,6 @@ import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import AnalyticsDashboard from '../../components/AnalyticsDashboard';
-
-// API Imports
 import { 
   getAdminAnalytics, 
   getPendingDocuments, approveDocument, rejectDocument,
@@ -15,11 +13,9 @@ import {
   getUserArchiveRequests, approveUserArchive, rejectUserArchive,
   getDeletionRequests, approveDeletion, rejectDeletion 
 } from '../../services/apiService';
-
-// --- UPDATED: CONFIRMATION MODAL WITH REASON INPUT ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger, showReasonInput }) => {
   const [mounted, setMounted] = useState(false);
-  const [reason, setReason] = useState(''); // State for rejection reason
+  const [reason, setReason] = useState('');
 
   useEffect(() => {
     setMounted(true);
@@ -29,7 +25,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      setReason(''); // Reset reason on open
+      setReason('');
     } else {
       document.body.style.overflow = 'unset';
     }
@@ -40,7 +36,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
     if (showReasonInput && !reason.trim()) {
       return toast.error("Please provide a reason.");
     }
-    onConfirm(reason); // Pass reason to parent
+    onConfirm(reason);
   };
 
   if (!isOpen || !mounted) return null;
@@ -75,8 +71,6 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
     document.body
   );
 };
-
-// --- UPDATED: REQUEST TABLE WITH VIEW BUTTON ---
 const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon }) => (
   <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col w-full h-full">
     {/* Header */}
@@ -101,7 +95,6 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
           ) : (
             items.map(item => {
               const reasonText = item.reason || item.archive_reason || item.deletion_reason || item.request_reason;
-              // Check if item has a viewable link (downloadLink or filepath)
               const viewLink = item.downloadLink || item.filepath; 
 
               return (
@@ -162,24 +155,16 @@ const RequestTable = ({ title, items, type, onAction, emptyMsg, colorClass, icon
 export default function AdminDashboardPage() {
   const { user, authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
-  
-  // Data States
   const [stats, setStats] = useState(null);
   const [pendingUploads, setPendingUploads] = useState([]);
   const [docArchives, setDocArchives] = useState([]);
   const [userArchives, setUserArchives] = useState([]);
   const [deletionRequests, setDeletionRequests] = useState([]);
-
-  // Modal State
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, type: '', id: null, action: '' });
-
-  // Role Checks
   const isSuperAdmin = user?.is_super_admin;
   const isAdmin = user?.is_admin || isSuperAdmin;
   const isAdvisor = user?.is_adviser; 
   const isPrivileged = isAdmin || isAdvisor;
-
-  // --- SAFE FETCH DATA ---
   const fetchAllData = async () => {
     try {
       try {
@@ -208,8 +193,6 @@ export default function AdminDashboardPage() {
         fetchAllData();
     }
   }, [user, authLoading, isPrivileged]);
-
-  // --- ACTION HANDLERS ---
   const initiateAction = (type, id, action) => {
       setConfirmConfig({ isOpen: true, type, id, action });
   };
@@ -217,8 +200,6 @@ export default function AdminDashboardPage() {
   const executeAction = async (reasonInput) => {
       const { type, id, action } = confirmConfig;
       if (!type || !id) return;
-
-      // Payload might include reason now
       const payload = reasonInput ? { reason: reasonInput } : {};
 
       try {
@@ -371,7 +352,7 @@ export default function AdminDashboardPage() {
         message={`Are you sure you want to ${confirmConfig.action} this request?`}
         confirmText={confirmConfig.action === 'approve' ? 'Approve' : 'Reject'}
         isDanger={confirmConfig.action === 'reject'}
-        showReasonInput={confirmConfig.action === 'reject'} // Show input only on reject
+        showReasonInput={confirmConfig.action === 'reject'}
       />
     </>
   );

@@ -1,6 +1,4 @@
 const db = require('../db');
-
-// --- 1. EXISTING SEARCH LOGGING ---
 exports.logSearch = async (term) => {
   if (!term || term.trim() === '') return;
   
@@ -34,13 +32,8 @@ exports.getTopSearches = async (limit = 5) => {
     return [];
   }
 };
-
-// --- 2. NEW: ANALYTICS BY USER ATTRIBUTES ---
-
-// Groups approved documents based on the Uploader's Strand
 exports.getDocumentsByStrand = async () => {
   try {
-    // FIX: Joined 'student_profiles' (sp) to find 'strand'
     const query = `
       SELECT sp.strand, COUNT(d.id) as count
       FROM documents d
@@ -56,11 +49,8 @@ exports.getDocumentsByStrand = async () => {
     return [];
   }
 };
-
-// Groups approved documents based on the Uploader's Year Level
 exports.getDocumentsByYearLevel = async () => {
   try {
-    // FIX: Joined 'student_profiles' (sp) to find 'year_level'
     const query = `
       SELECT sp.year_level, COUNT(d.id) as count
       FROM documents d
@@ -76,13 +66,8 @@ exports.getDocumentsByYearLevel = async () => {
     return [];
   }
 };
-
-// --- 3. NEW: ANALYTICS BY DOCUMENT ATTRIBUTES ---
-
-// Groups approved documents by Subject
 exports.getDocumentsBySubject = async () => {
   try {
-    // Note: Ensure your 'documents' table has a 'subject' column.
     const query = `
       SELECT subject, COUNT(*) as count
       FROM documents
@@ -98,11 +83,8 @@ exports.getDocumentsBySubject = async () => {
     return [];
   }
 };
-
-// Bonus: Uploads over the last 6 months
 exports.getUploadTrends = async () => {
   try {
-    // FIX: Swapped to 'created_at' to match your schema
     const query = `
       SELECT TO_CHAR(created_at, 'Mon') as month, COUNT(*) as count
       FROM documents
@@ -121,7 +103,6 @@ exports.getUploadTrends = async () => {
 
 exports.getMostViewedDocuments = async () => {
   try {
-    // FIX: Removed 'year_level' from SELECT because documents table doesn't have it
     const { rows } = await db.query(
         `SELECT title, views 
          FROM documents 
@@ -155,7 +136,6 @@ exports.getActivityHeatmap = async () => {
 
 exports.getKeywordTrends = async () => {
   try {
-    // FIX: Using jsonb_array_elements_text because ai_keywords is JSONB
     const query = `
       SELECT term, COUNT(*) as count
       FROM documents, jsonb_array_elements_text(ai_keywords) as term

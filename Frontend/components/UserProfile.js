@@ -4,9 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { requestPasswordOTP, changeUserPassword } from '../services/apiService';
-import EditUserModal from '../components/EditUserModal'; 
-
-// --- 1. HELPER COMPONENT: Password Checklist ---
+import EditUserModal from '../components/EditUserModal';
 const PasswordRequirements = ({ password }) => {
   const pwd = password || ''; 
   const requirements = [
@@ -83,8 +81,6 @@ export default function UserProfile() {
             setPwMessage({ type: 'error', text: 'New passwords do not match.' });
             return;
         }
-
-        // Strict Check
         const rules = [
             { test: pwd.length >= 8, msg: "Password must be at least 8 characters." },
             { test: /[A-Z]/.test(pwd), msg: "Password must contain an uppercase letter." },

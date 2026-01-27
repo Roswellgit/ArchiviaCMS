@@ -2,39 +2,26 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 
-// ✅ Import the updated middleware (which now allows Advisors)
+
 const { verifyToken, isAdmin } = require('../middleware/authMiddleware');
 
-// ==========================================
-// 1. ACCOUNT & GROUP CREATION
-// ==========================================
-
-// Frontend calls: api.post('/admin/users', payload)
+//Account and  Group Creation
 router.post('/users', verifyToken, isAdmin, adminController.createAccount);
 
 router.post('/groups', verifyToken, isAdmin, adminController.createGroup);
 
-// ==========================================
-// 2. ANALYTICS (Accessible to Students/Advisors)
-// ==========================================
+//Analytics
 router.get('/analytics', verifyToken, adminController.getDashboardStats);
 router.get('/analytics/insight', verifyToken, adminController.getAnalyticsAiInsight);
 
-// ==========================================
-// 3. GROUPS & MEMBERSHIP
-// ==========================================
+//Groups and Memberships
 router.get('/groups', verifyToken, isAdmin, adminController.getAllGroups);
 router.delete('/groups/:id', verifyToken, isAdmin, adminController.deleteGroup);
-
-// ✅ NEW: Group Membership Routes (Fetch, Add, Remove)
 router.get('/groups/:id/members', verifyToken, isAdmin, adminController.getGroupMembers);
 router.post('/groups/:id/members', verifyToken, isAdmin, adminController.addStudentToGroup);
 router.delete('/groups/:id/members/:userId', verifyToken, isAdmin, adminController.removeStudentFromGroup);
 
-// ==========================================
-// 4. PROTECT ALL REMAINING ROUTES
-// ==========================================
-// This applies verifyToken + isAdmin to everything below
+
 router.use(verifyToken, isAdmin);
 
 // --- User Management ---

@@ -8,44 +8,20 @@ export default function AdminLayout({ children }) {
   const { user, isAuthenticated, authLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-
-  // Define access logic in one place
-  // Note: This allows Advisors into /admin. 
-  // Ensure individual pages (like /admin/theme) have their own checks if Advisors shouldn't see them.
   const hasAccess = user?.is_admin || user?.is_super_admin || user?.is_adviser;
 
   useEffect(() => {
-    // 1. Wait for Auth to load
     if (authLoading) return;
-
-    // 2. Not logged in? -> Go to Login with return URL
     if (!isAuthenticated) {
       const returnUrl = encodeURIComponent(pathname);
       router.push(`/login?redirect=${returnUrl}`); 
       return;
     }
-
-    // 3. Redirect if no access
     if (!hasAccess) {
-      // Kick them out to analytics (or home /)
       router.push('/analytics'); 
     }
 
-    // Optional: Strict Redirect for Advisors
-    // If you want to prevent Advisors from seeing Documents/Theme globally:
-    /*
-    if (user?.is_adviser && !user?.is_admin && !user?.is_super_admin) {
-        const protectedRoutes = ['/admin/documents', '/admin/theme', '/admin/requests'];
-        if (protectedRoutes.some(route => pathname.startsWith(route))) {
-            router.push('/admin/users'); // Force them to their allowed area
-        }
-    }
-    */
-
   }, [isAuthenticated, hasAccess, authLoading, router, pathname, user]);
-
-  
-  // 4. Loading State (Prevents content flash)
   if (authLoading || !isAuthenticated || !hasAccess) {
     return (
       <main className="container mx-auto p-20 text-center text-slate-400">
@@ -56,8 +32,6 @@ export default function AdminLayout({ children }) {
       </main>
     );
   }
-
-  // 5. Render Content
   return (
     <main 
       className="container mx-auto p-6 md:p-10 min-h-screen animate-fade-in"

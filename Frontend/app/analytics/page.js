@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getAdminAnalytics } from '../../services/apiService';
 import { useAuth } from '../../context/AuthContext';
-import AnalyticsDashboard from '../../components/AnalyticsDashboard'; 
-// Ensure AnalyticsDashboard is exported correctly from your components folder
+import AnalyticsDashboard from '../../components/AnalyticsDashboard';
 
 export default function AnalyticsPage() {
   const [stats, setStats] = useState(null);
@@ -12,7 +11,6 @@ export default function AnalyticsPage() {
   const { user, isAuthenticated, authLoading } = useAuth();
 
   useEffect(() => {
-    // Wait for auth to load before fetching
     if (authLoading) return;
 
     const fetchStats = async () => {

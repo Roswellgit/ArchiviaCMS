@@ -2,9 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import api from '../services/apiService'; 
-
-// --- SUB-COMPONENT: STAT CARD ---
+import api from '../services/apiService';
 const StatCard = ({ title, value, subtitle, icon, colorClass }) => (
   <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden group print:border-slate-300 print:shadow-none print:break-inside-avoid">
     <div className="relative z-10">
@@ -21,8 +19,6 @@ const StatCard = ({ title, value, subtitle, icon, colorClass }) => (
     </div>
   </div>
 );
-
-// --- SUB-COMPONENT: KEYWORD CLOUD ---
 const KeywordCloud = ({ keywords }) => {
   if (!keywords || keywords.length === 0) return <div className="text-sm text-slate-400">No keywords found</div>;
   
@@ -46,14 +42,12 @@ const KeywordCloud = ({ keywords }) => {
     </div>
   );
 };
-
-// --- SUB-COMPONENT: SEARCH LIST (Trending Searches) ---
 const SearchList = ({ searches }) => {
   if (!searches || searches.length === 0) return <div className="text-sm text-slate-400">No recent searches</div>;
 
   return (
     <div className="space-y-3">
-      {searches.slice(0, 8).map((s, idx) => ( // Limit to top 8
+      {searches.slice(0, 8).map((s, idx) => (
         <div key={idx} className="flex justify-between items-center group cursor-default">
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-slate-300 w-4">#{idx + 1}</span>
@@ -69,8 +63,6 @@ const SearchList = ({ searches }) => {
     </div>
   );
 };
-
-// --- SUB-COMPONENT: HORIZONTAL BAR CHART ---
 const HorizontalBarChart = ({ data, labelKey, valueKey, colorFrom, colorTo }) => {
   if (!data || data.length === 0) return <div className="text-sm text-slate-400">No data available</div>;
 
@@ -100,28 +92,16 @@ const HorizontalBarChart = ({ data, labelKey, valueKey, colorFrom, colorTo }) =>
     </div>
   );
 };
-
-// --- MAIN DASHBOARD COMPONENT ---
 export default function AnalyticsDashboard({ stats, user }) {
   const componentRef = useRef();
-  
-  // State for AI Insight & Paper Size
   const [aiInsight, setAiInsight] = useState('');
   const [loadingAi, setLoadingAi] = useState(false);
   const [paperSize, setPaperSize] = useState('a4');
-
-  // --- PERMISSION LOGIC ---
   const isSuperAdmin = user?.is_super_admin;
   const isAdmin = user?.is_admin || isSuperAdmin;
-  const isAdviser = user?.is_adviser; 
-  
-  // Permission: Admins, Super Admins, and Advisers can print
+  const isAdviser = user?.is_adviser;
   const canPrint = isAdmin || isAdviser;
-  
-  // Permission: Students are anyone who isn't privileged
   const isStudent = !isAdmin && !isAdviser;
-
-  // --- FETCH AI INSIGHT ---
   useEffect(() => {
     const fetchInsight = async () => {
       if (!stats) return; 
@@ -155,7 +135,7 @@ export default function AnalyticsDashboard({ stats, user }) {
   const totalCount = stats.totalDocuments || 0;
   const trendData = stats.uploadTrend || [];
   const keywordData = stats.topKeywords || [];
-  const searchData = stats.topSearches || []; // Get Search Data
+  const searchData = stats.topSearches || [];
 
   return (
     <div ref={componentRef} className="space-y-8 animate-fade-in print:bg-white print:p-0 print:space-y-6">

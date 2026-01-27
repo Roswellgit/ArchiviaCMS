@@ -4,9 +4,6 @@ const { OAuth2Client } = require('google-auth-library');
 const userModel = require('../models/userModel');
 const emailService = require('../services/emailService');
 const crypto = require('crypto');
-
-// ✅ FIX: Import as 'pool' and alias 'db' to it.
-// This prevents "pool is not defined" AND "db is not defined" errors.
 const pool = require('../db');
 const db = pool; 
 
@@ -54,7 +51,6 @@ exports.register = async (req, res) => {
    try {
     await emailService.sendOTP(email, otp); 
   } catch (emailError) {
-    // ✅ Safe: uses 'db' which is now defined as 'pool'
     await db.query('DELETE FROM users WHERE id = $1', [user.id]); 
     return res.status(500).json({ message: 'Failed to send verification email. Please try again.' });
   }
@@ -167,7 +163,7 @@ exports.login = async (req, res) => {
         is_admin: user.is_admin,
         is_super_admin: user.is_super_admin || false,
         is_adviser: user.is_adviser,
-        force_password_change: user.force_password_change // ✅ ADDED: Send flag to frontend
+        force_password_change: user.force_password_change
       } 
     });
 
@@ -242,7 +238,7 @@ exports.googleLogin = async (req, res) => {
         is_admin: user.is_admin,
         is_super_admin: user.is_super_admin || false,
         is_adviser: user.is_adviser,
-        force_password_change: false // Google Users don't need this flow usually
+        force_password_change: false
       } 
     });
 
@@ -269,7 +265,7 @@ exports.getProfile = async (req, res) => {
       is_admin: user.is_admin,
       is_super_admin: user.is_super_admin,
       is_adviser: user.is_adviser,
-      force_password_change: user.force_password_change // ✅ ADDED
+      force_password_change: user.force_password_change
     });
   } catch (err) {
     console.error(err.message);
@@ -414,7 +410,7 @@ exports.requestPasswordChangeOTP = async (req, res) => {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
     await db.query(
       'UPDATE users SET otp_code = $1, otp_expires = $2 WHERE id = $3',
@@ -461,8 +457,6 @@ exports.changePassword = async (req, res) => {
     }
 
     const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
-
-    // ✅ MODIFIED: Updates Password AND Clears the Flag (using userModel logic we added)
     await userModel.updatePassword(userId, newPasswordHash);
 
     await db.query(
@@ -477,12 +471,6 @@ exports.changePassword = async (req, res) => {
     res.status(500).json({ message: 'Server error changing password.' });
   }
 };
-
-// ===============================================
-// ✅ NEW ENDPOINT: DIRECT PASSWORD CHANGE (No OTP)
-// ===============================================
-// This is used by the "First Login Modal" where the user is already authenticated
-// and forced to change their password.
 exports.changePasswordDirect = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     const userId = req.user.userId;
@@ -490,8 +478,6 @@ exports.changePasswordDirect = async (req, res) => {
     if (!currentPassword || !newPassword) {
         return res.status(400).json({ message: "Both current and new passwords are required." });
     }
-
-    // Validate new password strength
     if (!passwordRegex.test(newPassword)) {
         return res.status(400).json({
           message: 'New password is too weak.',
@@ -500,22 +486,13 @@ exports.changePasswordDirect = async (req, res) => {
     }
   
     try {
-      // 1. Get the user (We need the password hash to verify current password)
-      // Note: We use db.query directly or userModel.findById if it returns password_hash (it usually doesn't for security)
-      // So let's query directly to be safe.
       const result = await db.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
       const user = result.rows[0];
       
       if (!user) return res.status(404).json({ message: 'User not found' });
-  
-      // 2. Verify current (temp) password
       const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
       if (!isMatch) return res.status(401).json({ message: 'Incorrect current password.' });
-  
-      // 3. Hash new password
       const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
-  
-      // 4. Update and CLEAR the 'force_password_change' flag
       await userModel.updatePassword(userId, newPasswordHash);
   
       res.json({ message: 'Password updated successfully.' });
@@ -565,8 +542,6 @@ exports.resetPassword = async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, saltRounds);
-    
-    // ✅ MODIFIED: Use model logic that clears the force flag too
     await userModel.updatePassword(user.id, passwordHash);
 
     res.json({ message: 'Password updated successfully. You can now login.' });

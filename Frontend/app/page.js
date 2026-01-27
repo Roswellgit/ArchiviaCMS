@@ -63,11 +63,7 @@ function HomeContent() {
 
   
 const handleSearch = (term) => {
-  // 1. Clean the input (handle null/undefined and trim whitespace)
   const cleanTerm = term ? String(term).trim() : '';
-  
-  // 2. Always push to the results view. 
-  // If cleanTerm is '', it shows all documents but stays on the results page.
   router.push(`/?q=${encodeURIComponent(cleanTerm)}`);
 };
 
@@ -77,13 +73,8 @@ const handleSearch = (term) => {
 
   const handleFilterChange = async (category, value) => {
     if (category === 'reset') {
-        // 1. Clear the local filter state
         setSelectedFilters({ keywords: [], year: [], journal: [], dateRange: null });
-        
-        // 2. Clear the URL (Sets q to empty string so it stays in results mode, not Hero mode)
         router.push('/?q=');
-        
-        // 3. Fetch the clean, full list of documents
         setIsLoading(true);
         try {
             const response = await searchDocuments('');

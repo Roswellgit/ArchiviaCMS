@@ -5,8 +5,6 @@ import { getAllUsers, adminReactivateUser, adminDeleteUserPermanently } from '..
 import { useAuth } from '../../../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import Link from 'next/link';
-
-// --- Reusable Confirmation Modal ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
   if (!isOpen) return null;
   return (
@@ -30,12 +28,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
 export default function ArchivedUsers() {
   const [archivedUsers, setArchivedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user: currentUser } = useAuth(); 
-  
-  // BULK STATE
-  const [selectedIds, setSelectedIds] = useState([]);
-
-  // Modal State (id: null means bulk)
+  const { user: currentUser } = useAuth();
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, type: '', id: null });
 
   useEffect(() => {
@@ -46,63 +39,38 @@ export default function ArchivedUsers() {
     try {
       setLoading(true);
       const response = await getAllUsers();
-      
       const allUsers = Array.isArray(response) ? response : (response.data || []);
       const inactive = allUsers.filter(u => !u.is_active);
       
       setArchivedUsers(inactive);
-      setSelectedIds([]); // Reset
     } catch (err) {
       toast.error('Failed to fetch archived users.');
     } finally {
       setLoading(false);
     }
   };
-
-  // --- BULK SELECTION HANDLERS ---
-  const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedIds(archivedUsers.map(u => u.id));
-    } else {
-      setSelectedIds([]);
-    }
-  };
-
-  const handleSelectOne = (e, id) => {
-    if (e.target.checked) {
-      setSelectedIds(prev => [...prev, id]);
-    } else {
-      setSelectedIds(prev => prev.filter(item => item !== id));
-    }
-  };
-
-  // --- HANDLERS ---
-  const initiateAction = (type, id = null) => {
+  const initiateAction = (type, id) => {
     setConfirmConfig({ isOpen: true, type, id });
   };
 
   const executeAction = async () => {
     const { type, id } = confirmConfig;
-    
-    // Close immediately
-    setConfirmConfig({ ...confirmConfig, isOpen: false });
+    if (!id) return;
 
     try {
-        const idsToProcess = id ? [id] : selectedIds;
-
         if (type === 'restore') {
-            await Promise.all(idsToProcess.map(uid => adminReactivateUser(uid)));
-            toast.success(`${idsToProcess.length > 1 ? 'Users' : 'User'} restored successfully.`);
+            await adminReactivateUser(id);
+            toast.success('User restored successfully.');
         } else if (type === 'delete') {
-            await Promise.all(idsToProcess.map(uid => adminDeleteUserPermanently(uid)));
-            toast.success(`${idsToProcess.length > 1 ? 'Users' : 'User'} permanently deleted.`);
+            await adminDeleteUserPermanently(id);
+            toast.success('User permanently deleted.');
         }
-        
-        // Refresh list
-        fetchArchivedUsers();
+        setArchivedUsers(prev => prev.filter(u => u.id !== id));
         
     } catch (err) {
-        toast.error(`Failed to ${type} user(s).`);
+        toast.error(`Failed to ${type} user.`);
+    } finally {
+        setConfirmConfig({ ...confirmConfig, isOpen: false });
     }
   };
 
@@ -122,44 +90,10 @@ export default function ArchivedUsers() {
         </Link>
       </div>
 
-      {/* BULK ACTION BAR */}
-      {selectedIds.length > 0 && currentUser?.is_super_admin && (
-          <div className="bg-slate-800 text-white p-3 rounded-xl flex justify-between items-center animate-fade-in mb-4 shadow-lg">
-              <span className="font-bold text-sm px-2">
-                  {selectedIds.length} selected
-              </span>
-              <div className="flex gap-2">
-                  <button 
-                      onClick={() => initiateAction('restore', null)} 
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition"
-                  >
-                      Restore Selected
-                  </button>
-                  <button 
-                      onClick={() => initiateAction('delete', null)} 
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition shadow-sm"
-                  >
-                      Delete Selected
-                  </button>
-              </div>
-          </div>
-      )}
-
       <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
         <table className="min-w-full divide-y divide-slate-100">
           <thead className="bg-slate-50/50">
             <tr>
-              {/* SELECT ALL */}
-              {currentUser?.is_super_admin && (
-                  <th className="px-6 py-4 w-10">
-                      <input 
-                          type="checkbox" 
-                          className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          onChange={handleSelectAll}
-                          checked={archivedUsers.length > 0 && selectedIds.length === archivedUsers.length}
-                      />
-                  </th>
-              )}
               <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">User Profile</th>
               <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Role</th>
               <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
@@ -167,21 +101,10 @@ export default function ArchivedUsers() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {archivedUsers.length === 0 ? (
-              <tr><td colSpan="4" className="text-center py-10 text-slate-400 italic">No archived users found.</td></tr>
+              <tr><td colSpan="3" className="text-center py-10 text-slate-400 italic">No archived users found.</td></tr>
             ) : (
               archivedUsers.map((user) => (
-                <tr key={user.id} className={`hover:bg-slate-50/50 transition-colors ${selectedIds.includes(user.id) ? 'bg-indigo-50/30' : ''}`}>
-                  {/* CHECKBOX */}
-                  {currentUser?.is_super_admin && (
-                      <td className="px-6 py-4">
-                          <input 
-                              type="checkbox" 
-                              className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                              checked={selectedIds.includes(user.id)}
-                              onChange={(e) => handleSelectOne(e, user.id)}
-                          />
-                      </td>
-                  )}
+                <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                         <div className="h-10 w-10 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-lg mr-4">
@@ -234,17 +157,11 @@ export default function ArchivedUsers() {
         isOpen={confirmConfig.isOpen}
         onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
         onConfirm={executeAction}
-        title={
-            confirmConfig.type === 'restore' 
-            ? (confirmConfig.id ? 'Restore User?' : `Restore ${selectedIds.length} Users?`)
-            : (confirmConfig.id ? 'Delete Permanently?' : `Delete ${selectedIds.length} Users?`)
-        }
-        message={
-            confirmConfig.type === 'restore' 
-            ? "These users will be reactivated and able to log in again."
-            : "Are you sure? This action cannot be undone."
-        }
-        confirmText={confirmConfig.type === 'restore' ? 'Restore' : 'Delete'}
+        title={confirmConfig.type === 'restore' ? 'Restore User?' : 'Delete Permanently?'}
+        message={confirmConfig.type === 'restore' 
+            ? "This user will be reactivated and able to log in again."
+            : "Are you sure you want to permanently delete this user? This action cannot be undone."}
+        confirmText={confirmConfig.type === 'restore' ? 'Restore User' : 'Delete'}
         isDanger={confirmConfig.type === 'delete'}
       />
     </div>

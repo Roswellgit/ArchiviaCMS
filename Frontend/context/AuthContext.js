@@ -28,12 +28,8 @@ export function AuthProvider({ children }) {
         if (decodedUser.exp * 1000 < Date.now()) {
           localStorage.removeItem('token');
         } else {
-          // --- ROBUST USER MAPPING ---
-          // We check the Boolean flag OR the text Role to be 100% sure
           const isAdviserRaw = decodedUser.is_adviser;
           const roleRaw = decodedUser.role ? decodedUser.role.toLowerCase() : '';
-          
-          // Force is_adviser to TRUE if the role says "adviser"
           const finalIsAdviser = isAdviserRaw || roleRaw === 'adviser' || roleRaw === 'advisor';
 
           setUser({ 
@@ -44,8 +40,6 @@ export function AuthProvider({ children }) {
               role: decodedUser.role,
               is_admin: decodedUser.is_admin,
               is_super_admin: decodedUser.is_super_admin,
-              
-              // ✅ THE FIX: Use the calculated safe value
               is_adviser: finalIsAdviser
           });
           setToken(storedToken);
@@ -63,7 +57,6 @@ export function AuthProvider({ children }) {
   const login = (userData, receivedToken) => {
     localStorage.setItem('token', receivedToken);
     setToken(receivedToken);
-    // userData comes from the login API response, which already has the field
     setUser(userData); 
     
     setAuthToken(receivedToken);

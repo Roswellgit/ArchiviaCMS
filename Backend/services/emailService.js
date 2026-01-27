@@ -131,15 +131,9 @@ exports.sendWelcomeEmail = async (to, firstName, password) => {
     console.error('[Email Service] Error sending welcome email:', error);
   }
 };
-
-// ==========================================
-// ✅ NEW NOTIFICATION TEMPLATES
-// ==========================================
-
-// 1. Notify User: Document Approved/Rejected
 exports.sendDocumentStatusUpdate = async (email, firstName, docTitle, status, reason = '') => {
   const subject = `Document Update: ${status.toUpperCase()} - ${docTitle}`;
-  const color = status === 'approved' ? '#10B981' : '#EF4444'; // Green or Red
+  const color = status === 'approved' ? '#10B981' : '#EF4444';
   const statusText = status.charAt(0).toUpperCase() + status.slice(1);
 
   const html = `
@@ -163,8 +157,6 @@ exports.sendDocumentStatusUpdate = async (email, firstName, docTitle, status, re
     console.error(`[Email Error] Failed to send status update: ${err.message}`);
   }
 };
-
-// 2. Notify User: Upload Received (Pending)
 exports.sendUploadConfirmation = async (email, firstName, docTitle) => {
   const subject = `Upload Confirmation: ${docTitle}`;
   const html = `
@@ -182,8 +174,6 @@ exports.sendUploadConfirmation = async (email, firstName, docTitle) => {
     console.error(`[Email Error] Failed to send upload confirmation: ${err.message}`);
   }
 };
-
-// 3. Notify Admins: New Document Alert
 exports.sendNewDocumentAlert = async (adminEmails, uploaderName, docTitle) => {
   if (!adminEmails || adminEmails.length === 0) return;
   
@@ -208,8 +198,6 @@ exports.sendNewDocumentAlert = async (adminEmails, uploaderName, docTitle) => {
     console.error(`[Email Error] Failed to send admin alert: ${err.message}`);
   }
 };
-
-// 4. Notify Super Admin: Deletion/Archive Request Pending
 exports.sendSuperAdminRequestAlert = async (superAdminEmails, requestType, docTitle, requesterName, reason) => {
   if (!superAdminEmails || superAdminEmails.length === 0) return;
 
@@ -234,8 +222,6 @@ exports.sendSuperAdminRequestAlert = async (superAdminEmails, requestType, docTi
     console.error(`[Email Error] Failed to send super admin alert: ${err.message}`);
   }
 };
-
-// 5. Notify Admin/Owner: Request Outcome (Archived/Deleted)
 exports.sendRequestOutcome = async (email, requestType, docTitle, outcome) => {
   const subject = `Request Update: ${requestType} for "${docTitle}"`;
   const color = outcome.toLowerCase().includes('approved') ? 'green' : 'red';

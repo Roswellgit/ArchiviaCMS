@@ -40,16 +40,11 @@ app.use((err, req, res, next) => {
 
 app.listen(port, async () => {
   console.log(`Backend server running on port ${port}`);
-  
-  // === OPTIMIZATION: Run in background (Non-blocking) ===
-  // We removed 'await' so the server startup doesn't hang here.
   console.log("Initializing background auto-archive check...");
   
   documentModel.autoArchiveOldDocuments()
     .then(() => console.log("Background auto-archive check completed."))
     .catch(err => console.error("Background auto-archive check failed:", err));
-
-  // 2. Schedule to run on the 1st of every month at midnight (00:00)
   cron.schedule('0 0 1 * *', async () => {
     console.log('Running scheduled monthly auto-archive job...');
     try {

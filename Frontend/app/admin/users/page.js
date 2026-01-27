@@ -8,17 +8,13 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../context/AuthContext';
 import api, { getAllUsers, adminDeleteUser } from '../../../services/apiService';
 
-import CreateUserModal from '../../../components/CreateUserModal'; 
-
-// --- PORTAL HELPER ---
+import CreateUserModal from '../../../components/CreateUserModal';
 const Portal = ({ children }) => {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
   return createPortal(children, document.body);
 };
-
-// --- CONFIRMATION MODAL ---
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, isDanger }) => {
   if (!isOpen) return null;
   return (
@@ -44,53 +40,33 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, confirm
 export default function ManageUsersPage() {
   const { user: currentUser, authLoading } = useAuth();
   const router = useRouter();
-
-  // --- STATE ---
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // BULK STATE
   const [selectedUserIds, setSelectedUserIds] = useState([]);
-
-  // Modal States
   const [showUserModal, setShowUserModal] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
-  
-  // Archive Modal State
   const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const [userToArchive, setUserToArchive] = useState(null); // Null means Bulk Mode
+  const [userToArchive, setUserToArchive] = useState(null);
   const [archiveReason, setArchiveReason] = useState('');
-
-  // General Confirmation Modal
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, action: null, data: null, title: '', message: '' });
 
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [groupMembers, setGroupMembers] = useState([]);
   const [selectedStudentToAdd, setSelectedStudentToAdd] = useState('');
-
-  // Group Form Data
   const [newGroup, setNewGroup] = useState({ name: '' });
-
-  // --- PERMISSIONS ---
   const isSuperAdmin = currentUser?.is_super_admin;
   const isAdmin = currentUser?.is_admin || isSuperAdmin;
   const isAdvisor = currentUser?.is_adviser;
   const isPrivileged = isAdmin || isAdvisor;
-
-  // --- FETCH DATA ---
   const fetchData = async () => {
     try {
       setLoading(true);
-      
-      // 1. Fetch Users
       const usersResponse = await getAllUsers();
       const allUsers = Array.isArray(usersResponse) ? usersResponse : (usersResponse.data || []);
       const activeUsers = allUsers.filter(u => u.is_active); 
       setUsers(activeUsers);
-
-      // 2. Fetch Groups (Wrapped in try/catch in case endpoint is missing)
       try {
          const groupsRes = await api.get('/admin/groups');
          setGroups(groupsRes.data || []);
@@ -99,7 +75,7 @@ export default function ManageUsersPage() {
          setGroups([]);
       }
 
-      setSelectedUserIds([]); // Clear selection on refresh
+      setSelectedUserIds([]);
     } catch (err) {
       console.error("Failed to load data", err);
       toast.error("Could not load data.");
@@ -114,11 +90,8 @@ export default function ManageUsersPage() {
       else fetchData();
     }
   }, [authLoading, isPrivileged]);
-
-  // --- BULK SELECTION HANDLERS ---
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-        // Prevent selecting self
         const selectable = users.filter(u => u.id !== currentUser.userId).map(u => u.id);
         setSelectedUserIds(selectable);
     } else {
@@ -130,8 +103,6 @@ export default function ManageUsersPage() {
     if (e.target.checked) setSelectedUserIds(prev => [...prev, id]);
     else setSelectedUserIds(prev => prev.filter(item => item !== id));
   };
-
-  // --- HELPER: ROLE BADGE ---
   const getRoleBadge = (u) => {
     let roleName = 'Student';
     let style = 'bg-slate-100 text-slate-600 border border-slate-200';
@@ -155,11 +126,9 @@ export default function ManageUsersPage() {
       </span>
     );
   };
-
-  // --- ARCHIVE HANDLERS ---
   const initiateArchive = (targetUser = null) => {
     if (targetUser && targetUser.id === currentUser.userId) return toast.error("Cannot archive yourself.");
-    setUserToArchive(targetUser); // Null = Bulk
+    setUserToArchive(targetUser);
     setArchiveReason(''); 
     setShowArchiveModal(true);
   };
@@ -170,11 +139,9 @@ export default function ManageUsersPage() {
 
     try {
         if (userToArchive) {
-            // Single
             await adminDeleteUser(userToArchive.id, { reason: archiveReason });
             toast.success("User archived successfully.");
         } else {
-            // Bulk
             const promises = selectedUserIds.map(id => 
                 adminDeleteUser(id, { reason: archiveReason })
             );
@@ -191,8 +158,6 @@ export default function ManageUsersPage() {
         toast.error("Archive failed.");
     }
   };
-
-  // --- GROUP CONFIRMATION HANDLERS ---
   const promptDeleteGroup = (groupId, groupName) => {
     setConfirmConfig({
       isOpen: true,
@@ -235,8 +200,6 @@ export default function ManageUsersPage() {
       setConfirmConfig({ ...confirmConfig, isOpen: false });
     }
   };
-
-  // --- GROUP MODAL HANDLERS ---
   const openMembersModal = async (group) => {
     setSelectedGroup(group);
     setShowMembersModal(true);
@@ -311,7 +274,7 @@ export default function ManageUsersPage() {
                   {selectedUserIds.length} users selected
               </span>
               <button 
-                  onClick={() => initiateArchive(null)} // Trigger Bulk
+                  onClick={() => initiateArchive(null)}
                   className="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-red-700 shadow-sm transition"
               >
                   Bulk Archive Selected

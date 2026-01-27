@@ -13,8 +13,6 @@ import {
 } from '../../../services/apiService'; 
 import { useAuth } from '../../../context/AuthContext'; 
 import { toast } from 'react-hot-toast';
-
-// --- INTERNAL PORTAL COMPONENT ---
 const Portal = ({ children }) => {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -31,34 +29,20 @@ export default function AdminDocumentManagement() {
   const [currentTab, setCurrentTab] = useState('active'); 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-
-  // --- BULK SELECTION STATE ---
   const [selectedDocIds, setSelectedDocIds] = useState([]);
-
-  // --- MODAL STATES ---
-  
-  // 1. Archive Modal
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
-  const [docToArchive, setDocToArchive] = useState(null); // Null indicates Bulk Mode
+  const [docToArchive, setDocToArchive] = useState(null);
   const [archiveReason, setArchiveReason] = useState('');
-
-  // 2. Delete Modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [docToDelete, setDocToDelete] = useState(null);
-
-  // 3. Restore Modal
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [docToRestore, setDocToRestore] = useState(null);
   
   const { user } = useAuth(); 
   const isSuperAdmin = user?.is_super_admin;
-
-  // Clear selection when tab changes
   useEffect(() => {
     setSelectedDocIds([]);
   }, [currentTab, currentPage]);
-
-  // Lock scroll when ANY modal is open
   useEffect(() => {
     if (isArchiveModalOpen || isDeleteModalOpen || isRestoreModalOpen) {
       document.body.style.overflow = 'hidden';
@@ -75,7 +59,7 @@ export default function AdminDocumentManagement() {
   const refreshData = () => {
     handleSearch(searchTerm);
     fetchPendingQueue();
-    setSelectedDocIds([]); // Clear selection on refresh
+    setSelectedDocIds([]);
   };
 
   const handleSearch = async (term) => {
@@ -104,8 +88,6 @@ export default function AdminDocumentManagement() {
     e.preventDefault();
     handleSearch(searchTerm);
   };
-
-  // --- BULK SELECTION HANDLERS ---
   const handleSelectAll = (e, currentItems) => {
     if (e.target.checked) {
       const ids = currentItems.map(doc => doc.id);
@@ -135,8 +117,6 @@ export default function AdminDocumentManagement() {
     }
     return 'Unknown Author';
   };
-
-  // --- ACTIONS ---
 
   const handleApprove = async (docId) => {
     try {
@@ -175,10 +155,8 @@ export default function AdminDocumentManagement() {
       toast.error("Rejection failed.");
     }
   };
-
-  // --- ARCHIVE HANDLERS (UPDATED) ---
   const openArchiveModal = (doc = null) => {
-    setDocToArchive(doc); // If null, treat as bulk archive
+    setDocToArchive(doc);
     setArchiveReason('');
     setIsArchiveModalOpen(true);
   };
@@ -189,11 +167,9 @@ export default function AdminDocumentManagement() {
 
     try {
         if (docToArchive) {
-            // Single Archive
             await adminArchiveDocument(docToArchive.id, { reason: archiveReason });
             toast.success("Document archived.");
         } else {
-            // Bulk Archive
             const promises = selectedDocIds.map(id => 
                 adminArchiveDocument(id, { reason: archiveReason })
             );
@@ -203,15 +179,13 @@ export default function AdminDocumentManagement() {
 
         setIsArchiveModalOpen(false);
         setDocToArchive(null);
-        setSelectedDocIds([]); // Clear selection
+        setSelectedDocIds([]);
         refreshData();
     } catch (err) { 
         toast.error("Failed to archive."); 
         console.error(err);
     }
   };
-
-  // --- RESTORE HANDLERS ---
   const openRestoreModal = (doc) => {
     setDocToRestore(doc);
     setIsRestoreModalOpen(true);
@@ -229,8 +203,6 @@ export default function AdminDocumentManagement() {
         toast.error("Restore failed.");
     }
   };
-
-  // --- DELETE HANDLERS ---
   const openDeleteModal = (doc) => {
     setDocToDelete(doc);
     setIsDeleteModalOpen(true);
@@ -248,8 +220,6 @@ export default function AdminDocumentManagement() {
         toast.error("Delete failed."); 
     }
   };
-
-  // --- FILTERING ---
   let listToRender = [];
   if (currentTab === 'pending') {
     listToRender = pendingDocs;
@@ -264,8 +234,6 @@ export default function AdminDocumentManagement() {
       return true;
     });
   }
-
-  // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = listToRender.slice(indexOfFirstItem, indexOfLastItem);
